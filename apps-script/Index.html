@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.4">
+<meta name="version" content="1.5">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <style>
@@ -158,11 +158,22 @@ td.overdue{background:#fdecea}
   function start() {
     call('apiBoot').then(function (b) {
       S.boot = b;
+      if (!b.years.length) { emptyState(); return null; }
       var y = Number(B.params.year);
       S.year = b.years.indexOf(y) !== -1 ? y : b.years[b.years.length - 1];
       if (B.params.period && (PERIODS.indexOf(B.params.period) !== -1 || B.params.period === 'ANNUAL')) S.period = B.params.period;
       return loadYear(S.year, true);
     }).catch(function (e) { app.innerHTML = ''; app.appendChild(h('div', { class: 'alert err', text: 'تعذر التحميل: ' + (e && e.message || e) })); });
+  }
+  function emptyState() {
+    app.innerHTML = '';
+    var admin = B.role === 'admin';
+    app.appendChild(h('div', { class: 'card', id: 'emptyState' }, h('h2', { text: 'لا توجد بيانات بعد' }),
+      h('p', { text: admin ? 'لم تُحمَّل بيانات المنصة في الجدول. اضغط «تهيئة وتحميل البيانات» لإنشاء الأوراق وتحميل موظفي وبنود وتقييمات 2025 وموظفي وبنود 2026 (بدون درجات).' : 'لم يتم إعداد المنصة بعد. تواصل مع مدير المنصة.' }),
+      admin ? h('button', { class: 'btn', id: 'btnSetup', onclick: function () {
+        this.disabled = true; this.textContent = 'جارٍ التهيئة…';
+        call('apiSetup').then(function (b) { S.boot = b; S.year = b.years[b.years.length - 1]; return loadYear(S.year, true); }).catch(function (e) { fail(e); emptyState(); });
+      } }, 'تهيئة وتحميل البيانات') : null));
   }
   function loadYear(y, pickPeriod) {
     return call('apiYear', y).then(function (d) {

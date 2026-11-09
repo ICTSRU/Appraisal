@@ -27,6 +27,8 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
     await page.addInitScript(SHIM); page.on('dialog', d => d.accept());
     await page.goto(`http://localhost:${port}${url}`); return page;
   }
+  /* ---------------- empty sheet → setup via API ---------------- */
+  { const G3 = create(); ok(G3.api.apiBoot().years.length === 0, 'fresh sheet → no years'); const b = G3.api.apiSetup(); ok(b.years.join() === '2025,2026', 'apiSetup seeds 2025+2026'); }
   /* ---------------- admin: evaluation page ---------------- */
   let p = await open('m.elmahdy@sr.edu.sa', '/');
   await p.waitForSelector('#matrix'); await p.screenshot({ path: SHOT + '/01_matrix_admin.png' });

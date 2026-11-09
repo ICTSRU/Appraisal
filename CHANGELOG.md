@@ -1,5 +1,8 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.5 — 2026-11-09
+- Empty-state fix: when the Sheet has no data the page shows «تهيئة وتحميل البيانات» (admin) which runs first-time setup from the page (`apiSetup`), with a clear error if Seed.gs is missing from the project.
+
 ## v1.4 — 2026-11-09
 - Seed: 2025 loads employees + criteria + actual scores (final); **2026 loads employees + criteria only, no scores** (`tools/build_seed.py ... --blank=2026`).
 - New menu item «مسح درجات سنة» (`clearYearScores`) to wipe a year's scores/comments in a sheet already seeded with the old data.

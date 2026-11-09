@@ -60,7 +60,7 @@ function create(opts = {}) {
   }
   const files = ['Calc.gs', 'Code.gs', 'Seed.gs', 'Api.gs'];
   vm.runInContext(files.map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n;\n') +
-    '\n;this.__api = {' + 'setup, apiBoot, apiYear, apiDataset, apiSaveScores, apiSetStatus, apiAddYear, apiSaveEmployee, apiSaveCriterion, apiSaveBands, apiSaveFollowUp, apiDeleteFollowUp, doGet, computeYear_, PERIODS, readTable_, roleOf_, accessStatus_, currentEmail_, rebuildAllResults, clearYearScores };', ctx);
+    '\n;this.__api = {' + 'setup, apiBoot, apiYear, apiDataset, apiSaveScores, apiSetStatus, apiAddYear, apiSaveEmployee, apiSaveCriterion, apiSaveBands, apiSaveFollowUp, apiDeleteFollowUp, doGet, computeYear_, PERIODS, readTable_, roleOf_, accessStatus_, currentEmail_, rebuildAllResults, clearYearScores, apiSetup };', ctx);
   return { ss, state, api: ctx.__api, ctx, render };
 }
 module.exports = { create };

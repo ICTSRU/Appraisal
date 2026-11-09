@@ -362,6 +362,14 @@ function rebuildResults_(year) {
 }
 function rebuildAllResults() { yearsList_().forEach(rebuildResults_); }
 
+/** Admin-only, from the web page: first-time setup (creates tabs + loads 2025 data and the blank 2026). */
+function apiSetup() {
+  requireRole_(['admin']);
+  if (!readTable_('Employees').length && typeof SEED === 'undefined') throw new Error('ملف Seed.gs غير موجود في مشروع Apps Script — أضفه ثم أعد المحاولة');
+  setup();
+  return apiBoot();
+}
+
 /** Menu ▸ clears ALL scores and comments of one year (keeps employees, criteria, status). Asks for the year and a confirmation. */
 function clearYearScores() {
   const ui = SpreadsheetApp.getUi();
