@@ -58,9 +58,9 @@ function create(opts = {}) {
     const src = fs.readFileSync(path.join(DIR, name + '.html'), 'utf8');
     return src.replace(/<\?!=\s*([\s\S]*?)\?>/g, (m, expr) => String(vm.runInContext('(' + expr + ')', Object.assign(ctx, vars))));
   }
-  const files = ['Calc.gs', 'Code.gs', 'Seed.gs', 'Api.gs'];
+  const files = ['Calc.gs', 'Code.gs', 'Seed.gs', 'Api.gs', 'Admin.gs'];
   vm.runInContext(files.map(f => fs.readFileSync(path.join(DIR, f), 'utf8')).join('\n;\n') +
-    '\n;this.__api = {' + 'setup, apiBoot, apiYear, apiDataset, apiSaveScores, apiSetStatus, apiAddYear, apiSaveEmployee, apiSaveCriterion, apiSaveBands, apiSaveFollowUp, apiDeleteFollowUp, doGet, computeYear_, PERIODS, readTable_, roleOf_, accessStatus_, currentEmail_, rebuildAllResults, clearYearScores, apiSetup };', ctx);
+    '\n;this.__api = {' + 'setup, apiBoot, apiYear, apiDataset, apiSaveScores, apiSetStatus, apiAddYear, apiSaveEmployee, apiSaveCriterion, apiSaveBands, apiSaveFollowUp, apiDeleteFollowUp, doGet, computeYear_, PERIODS, readTable_, roleOf_, accessStatus_, currentEmail_, rebuildAllResults, clearYearScores, apiSetup, apiUsers, apiSaveUser, apiDeleteUser, apiAudit, PERMS, can_, permsOf_ };', ctx);
   return { ss, state, api: ctx.__api, ctx, render };
 }
 module.exports = { create };

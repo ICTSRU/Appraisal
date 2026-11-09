@@ -4,7 +4,7 @@ const G = create(); const A = G.api;
 let pass = 0; const ok = (c, m) => { assert(c, m); pass++; };
 A.setup();
 // sheets exist
-['Employees', 'Criteria', 'Periods', 'Scores', 'Comments', 'FollowUp', 'Settings', 'ChangeLog', 'Results', 'AllowedUsers'].forEach(n => ok(G.ss.getSheetByName(n), 'sheet ' + n));
+['Employees', 'Criteria', 'Periods', 'Scores', 'Comments', 'FollowUp', 'Settings', 'AuditLog', 'Results', 'AllowedUsers'].forEach(n => ok(G.ss.getSheetByName(n), 'sheet ' + n));
 ok(A.readTable_('Scores').length === 2 * (11 * 19 * 4) - 19 * 3 - 19 - 19 /*see below*/ || true, 'noop');
 const d25 = A.apiYear(2025), d26 = A.apiYear(2026);
 ok(d25.criteria.length === 19 && d25.employees.length === 11, '19 criteria / 11 employees');
@@ -70,7 +70,7 @@ assert.throws(() => A.apiSaveBands([{ min: 50, ar: 'x' }, { min: 20, ar: 'y' }])
 let fu = A.apiSaveFollowUp({ year: 2026, period: 'Q4', empId: 'E03', action: 'دورة تواصل', due: '2026-12-01', status: 'open' }); ok(fu.length === 1, 'follow-up add');
 fu = A.apiSaveFollowUp({ id: fu[0].id, year: 2026, period: 'Q4', empId: 'E03', action: 'دورة تواصل', due: '2026-12-01', status: 'done' }); ok(fu[0].status === 'done', 'follow-up done');
 ok(A.apiDeleteFollowUp(fu[0].id, 2026).length === 0, 'follow-up delete');
-ok(A.readTable_('ChangeLog').length > 10, 'change log written');
+ok(A.readTable_('AuditLog').length > 10, 'audit log written');
 // idempotent re-setup keeps data
 const n = A.readTable_('Scores').length; A.setup(); ok(A.readTable_('Scores').length === n, 'setup is idempotent');
 // clearYearScores (menu) wipes one year only

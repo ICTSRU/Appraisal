@@ -87,10 +87,25 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   let e = await open('ev@sr.edu.sa', '/?year=2026&period=Q4'); await e.waitForSelector('#matrix');
   ok(await e.locator('#matrix input[data-c=C19]').first().isDisabled(), 'evaluator cannot edit CIO item');
   ok(!(await e.locator('#matrix input[data-c=C01]').first().isDisabled()), 'evaluator edits manager items');
-  ok(await e.locator('[data-tab=settings]').count() === 0, 'no settings tab for evaluator'); ok(await e.locator('#btnAddYear').count() === 0, 'no add-year for evaluator');
+  ok(await e.locator('[data-tab=settings]').count() === 0, 'no settings tab for evaluator'); ok(await e.locator('[data-tab=users]').count() === 0 && await e.locator('[data-tab=audit]').count() === 0, 'no users/audit tabs for evaluator'); ok(await e.locator('#btnAddYear').count() === 0, 'no add-year for evaluator');
   /* ---------------- viewer ---------------- */
   let v = await open('v@sr.edu.sa', '/?year=2025&period=Q1'); await v.waitForSelector('#matrix');
-  ok(await v.locator('#matrix input:not([disabled])').count() === 0, 'viewer read-only'); ok(!(await v.locator('#saveBar').isVisible()), 'no save bar for viewer');
+  ok(await v.locator('#matrix input:not([disabled])').count() === 0, 'viewer read-only'); ok(!(await v.locator('#saveBar').isVisible()), 'no save bar for viewer'); ok(await v.locator('[data-tab=users]').count() === 0 && await v.locator('[data-tab=audit]').count() === 0, 'no users/audit tabs for viewer');
+  /* ---------------- users + audit tabs (admin) ---------------- */
+  await p.selectOption('#yearSel', '2026'); await p.click('[data-tab=users]'); await p.waitForSelector('#usersTbl'); await p.screenshot({ path: SHOT + '/11_users.png', fullPage: true });
+  ok(await p.locator('#usersTbl tbody tr').count() >= 3, 'users listed'); ok(await p.locator('#permTbl tbody tr').count() === 13, 'permission matrix 13 rows');
+  ok(await p.locator('[data-user="m.elmahdy@sr.edu.sa"] select').isDisabled() && await p.locator('[data-user="m.elmahdy@sr.edu.sa"] [data-del]').count() === 0, 'owner row locked');
+  await p.fill('#uEmail', 'newbie@sr.edu.sa'); await p.fill('#uName', 'Newbie'); await p.selectOption('#uRole', 'evaluator'); await p.click('#uAdd'); await p.waitForSelector('[data-user="newbie@sr.edu.sa"]');
+  ok(G.api.readTable_('AuditLog').some(r => r.action === 'user.add' && r.ref === 'newbie@sr.edu.sa'), 'user added + audited (UI)');
+  await p.selectOption('[data-user="newbie@sr.edu.sa"] select', 'viewer'); await p.click('[data-save="newbie@sr.edu.sa"]'); await p.waitForFunction(() => !document.querySelector('[data-save="newbie@sr.edu.sa"]:not(.hide)'));
+  ok(G.api.readTable_('AuditLog').some(r => r.action === 'user.update' && /evaluator → viewer/.test(r.details)), 'role change audited (UI)');
+  await p.fill('#uEmail', 'bad@gmail.com'); await p.click('#uAdd'); await p.waitForSelector('.toast.err'); ok(/جامعي/.test(await p.locator('.toast.err').first().textContent()), 'server rejects non-university email');
+  await p.click('[data-tab=audit]'); await p.waitForSelector('#auditTbl'); await p.screenshot({ path: SHOT + '/12_audit.png', fullPage: true });
+  ok(await p.locator('#auditTbl tbody tr').count() > 5, 'audit rows shown'); await p.fill('#aQ', 'newbie'); await p.click('#aGo'); await p.waitForFunction(() => document.querySelectorAll('#auditTbl tbody tr').length > 0 && [...document.querySelectorAll('#auditTbl tbody tr')].every(r => /newbie/i.test(r.textContent)));
+  ok(true, 'audit search'); await p.click('#aReset'); await p.waitForSelector('#auditTbl');
+  await p.click('[data-tab=users]'); await p.waitForSelector('[data-del="newbie@sr.edu.sa"]'); await p.click('[data-del="newbie@sr.edu.sa"]'); await p.waitForFunction(() => !document.querySelector('[data-user="newbie@sr.edu.sa"]'));
+  ok(G.api.readTable_('AuditLog').some(r => r.action === 'user.delete' && r.ref === 'newbie@sr.edu.sa'), 'user deleted + audited (UI)');
+  await p.click('[data-tab=eval]');
   /* ---------------- dashboard ---------------- */
   let d = await open('m.elmahdy@sr.edu.sa', '/?page=dashboard'); await d.waitForSelector('#tAvg'); await d.screenshot({ path: SHOT + '/07_dashboard.png', fullPage: true });
   console.log('TAVG:', await d.locator('#tAvg').textContent()); ok(await d.locator('#draftWarn').count() === 1, 'draft warning on 2026');

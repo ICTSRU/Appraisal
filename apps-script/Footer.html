@@ -8,7 +8,7 @@
   var B = window.BOOT, L = window.ITOC_LOGOS || {};
   function s(id,v){var e=document.getElementById(id); if(e) e.src=v;}
   s('logoSru',L.sru); s('logoIctd',L.ictd); s('logoItoc',L.itoc); s('logoItoc2',L.itoc);
-  var ROLE={admin:'مدير المنصة',evaluator:'مقيّم',cio:'تقييم الـ CIO',viewer:'اطلاع'};
+  var ROLE={admin:'مدير',evaluator:'محرّر',cio:'تقييم الـ CIO',viewer:'مطّلع'};
   document.getElementById('whoName').textContent=B.userName||B.user;
   document.getElementById('whoRole').textContent=_t(ROLE[B.role]||B.role);
   document.getElementById('switchAcc').href=B.urls.switchUrl;

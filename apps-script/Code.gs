@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- *  SRU Performance Appraisal Platform (منصة المتابعة والتقييم السنوي للأداء) v1.6
+ *  SRU Performance Appraisal Platform (منصة المتابعة والتقييم السنوي للأداء) v1.7
  *  Built on SRU Secure Access Kit v1.4 — Sulaiman Al Rajhi University Google accounts (@sr.edu.sa) only
  *  ICTD — ITOC
  * ---------------------------------------------------------------------
@@ -19,7 +19,7 @@
 /* ▼▼▼ CONFIG — change per platform ▼▼▼ */
 const APP_NAME       = 'منصة المتابعة والتقييم السنوي للأداء';
 const APP_NAME_EN    = 'SRU Performance Appraisal';
-const APP_VERSION    = '1.6';
+const APP_VERSION    = '1.7';
 const ALLOWED_DOMAIN = 'sr.edu.sa';
 const FAVICON_URL    = 'https://ictsru.github.io/ITOC/assets/itoc-logo.png';
 
@@ -97,6 +97,38 @@ function requireRole_(allowed) {
   return { email: email, role: role };
 }
 
+/**
+ * Permission matrix — the ONLY place roles are mapped to abilities. Enforced on the server by requirePerm_();
+ * the pages receive it through apiBoot().perms just to show/hide buttons.
+ *   admin = مدير · evaluator = محرّر · cio = تقييم الـ CIO · viewer = مطّلع
+ */
+const PERMS = {
+  'data.read':         ['admin', 'evaluator', 'cio', 'viewer'],   // evaluation page + dashboard
+  'scores.write':      ['admin', 'evaluator', 'cio'],             // evaluator: manager criteria · cio: CIO criterion (checked per item)
+  'scores.write.final':['admin'],                                 // edit an approved period
+  'comments.write':    ['admin', 'evaluator'],
+  'followup.write':    ['admin', 'evaluator', 'cio'],
+  'status.change':     ['admin'],                                 // approve / reopen a period
+  'year.add':          ['admin'],
+  'employee.write':    ['admin'],
+  'criterion.write':   ['admin'],
+  'bands.write':       ['admin'],
+  'users.manage':      ['admin'],
+  'audit.read':        ['admin'],
+  'setup':             ['admin']
+};
+function can_(role, perm) { return !!PERMS[perm] && PERMS[perm].indexOf(role) !== -1; }
+function permsOf_(role) { return Object.keys(PERMS).filter(function (p) { return can_(role, p); }); }
+/** Server-side gate: signed-in + allowed + role has `perm`. A refusal is written to the audit trail. */
+function requirePerm_(perm) {
+  const ctx = requireRole_(null);
+  if (!can_(ctx.role, perm)) {
+    try { audit_(ctx, 'denied', { entity: 'permission', ref: perm, details: 'role ' + ctx.role }); } catch (e) { console.error('audit failed: ' + e); }
+    throw new Error('غير مصرح — صلاحيتك (' + ctx.role + ') لا تسمح بهذا الإجراء');
+  }
+  return ctx;
+}
+
 const ACCESS_HEADERS = ['email', 'name', 'role', 'active', 'notes'];
 
 /** Map email → {role, name} of ACTIVE rows (cached briefly). */
@@ -158,7 +190,7 @@ function accessSheet_(create) {
     [260, 200, 110, 70, 260].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
     sh.getRange(2, 4, 300, 1).insertCheckboxes();
     sh.getRange('A1').setNote('البريد الجامعي كاملًا — name@sr.edu.sa');
-    sh.getRange('C1').setNote('admin = مدير المنصة · evaluator = مقيّم · cio = تقييم الـ CIO فقط · viewer = اطلاع فقط (لوحة المؤشرات)');
+    sh.getRange('C1').setNote('admin = مدير · evaluator = محرّر · cio = تقييم الـ CIO فقط · viewer = مطّلع (قراءة فقط) — يُفضَّل إدارة المستخدمين من تبويب «المستخدمون» في المنصة');
     sh.getRange('D1').setNote('ألغِ العلامة لإيقاف الوصول دون حذف الصف');
   }
   return sh;

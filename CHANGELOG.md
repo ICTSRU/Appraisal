@@ -1,5 +1,11 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.7 — 2026-11-09
+- **Users panel** (tab «المستخدمون», admin only): add / edit / deactivate / delete users, roles مدير · محرّر · تقييم الـ CIO · مطّلع, last sign-in, permission matrix. Owner account is fixed; nobody can change their own role or delete themselves.
+- **Server-enforced permissions**: one `PERMS` matrix in `Code.gs` + `requirePerm_()` on every `api*` call (the UI only mirrors it). Fixes: CIO/viewer can no longer post comments through the API; comment permission is checked before anything is written.
+- **Audit log** (sheet `AuditLog`, tab «سجل التدقيق»): who / role / when / what / old → new for scores, comments, period approve & reopen, years, employees, criteria, bands, follow-ups, users, setup, year clears, **and refused attempts** (`denied`). Filter by user, action, date, text; CSV export. Replaces `ChangeLog` (old sheet is left untouched).
+- Tests: `tools/test/admin.test.js` (122 server checks) + UI checks in `e2e.test.js`.
+
 ## v1.6 — 2026-11-09
 - **English / Arabic switch** (button in the header, remembered per browser; `?lang=en` also works) — full UI, report, dashboard, server messages; direction flips RTL↔LTR.
 - **Dark mode** (button in the header, follows the system by default); dashboard charts use a dark palette validated for colour-blind separation; printing/PDF is always light.

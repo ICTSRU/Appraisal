@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.6">
+<meta name="version" content="1.7">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <?!= include('I18n') ?>
@@ -25,6 +25,7 @@
 .empnav{display:flex;flex-direction:column;gap:4px;min-width:180px}
 .empnav button{text-align:start;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);padding:6px 10px;cursor:pointer;font:inherit}
 .empnav .small{unicode-bidi:plaintext}
+td.ctr{text-align:center}td.yes{color:var(--ok);font-weight:700}tr.off td{opacity:.55}
 .empnav button.on{border-color:var(--ptext);background:var(--purple-light);font-weight:700}
 .crit{border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;background:var(--surface)}
 .crit.cio{border-inline-start:4px solid var(--blue)}
@@ -197,15 +198,19 @@ td.overdue{background:#fdecea}
   function render() {
     app.innerHTML = '';
     app.appendChild(toolbar());
-    var tabs = [['eval', _t('التقييم')], ['follow', _t('المتابعة')], ['settings', _t('الإعدادات')]];
-    if (B.role !== 'admin') tabs.pop();
+    var tabs = [['eval', _t('التقييم')], ['follow', _t('المتابعة')]];
+    if (can('users.manage')) tabs.push(['users', _t('المستخدمون')]);
+    if (can('audit.read')) tabs.push(['audit', _t('سجل التدقيق')]);
+    if (can('bands.write')) tabs.push(['settings', _t('الإعدادات')]);
     app.appendChild(h('div', { class: 'tabs no-print', style: 'margin-bottom:12px', role: 'tablist' },
-      tabs.map(function (t) { return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), role: 'tab', 'data-tab': t[0], onclick: function () { S.tab = t[0]; render(); } }, t[1]); })));
+      tabs.map(function (t) { return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), role: 'tab', 'data-tab': t[0], onclick: function () { S.tab = t[0]; if (t[0] === 'users') S.users = null; if (t[0] === 'audit') AU.rows = null; render(); } }, t[1]); })));
     var pane = h('div', { id: 'pane' });
     app.appendChild(pane);
     if (S.tab === 'eval') pane.appendChild(S.period === 'ANNUAL' ? annualPane() : (S.view === 'matrix' ? matrixPane() : employeePane()));
     else if (S.tab === 'follow') pane.appendChild(followPane());
-    else pane.appendChild(settingsPane());
+    else if (S.tab === 'users' && can('users.manage')) pane.appendChild(usersPane());
+    else if (S.tab === 'audit' && can('audit.read')) pane.appendChild(auditPane());
+    else if (can('bands.write')) pane.appendChild(settingsPane());
     app.appendChild(saveBar());
   }
 
@@ -525,6 +530,97 @@ td.overdue{background:#fdecea}
   function saveFu(item) { call('apiSaveFollowUp', item).then(function (x) { S.data.followups = x; render(); toast(_t('تم الحفظ')); }).catch(fail); }
 
   /* ---------- settings (admin) ---------- */
+  /* ---------- users & audit (admin only; the server enforces it too) ---------- */
+  function can(p) { return !!(S.boot && S.boot.perms && S.boot.perms.indexOf(p) !== -1); }
+  var ROLE_LBL = function (r) { return { admin: _t('مدير'), evaluator: _t('محرّر'), cio: _t('تقييم الـ CIO'), viewer: _t('مطّلع') }[r] || r; };
+  var ROLE_ORDER = ['admin', 'evaluator', 'cio', 'viewer'];
+  var PERM_LBL = function () { return [
+    ['data.read', _t('عرض التقييم ولوحة المؤشرات')], ['scores.write', _t('إدخال الدرجات (المحرّر: بنود المدير · CIO: بند الـ CIO)')], ['comments.write', _t('كتابة الملاحظات')],
+    ['followup.write', _t('إجراءات المتابعة')], ['scores.write.final', _t('تعديل فترة معتمدة')], ['status.change', _t('اعتماد الفترة وإعادة فتحها')], ['year.add', _t('إضافة سنة')],
+    ['employee.write', _t('إدارة الموظفين')], ['criterion.write', _t('تعديل بنود التقييم')], ['bands.write', _t('تعديل فئات التقدير')], ['users.manage', _t('إدارة المستخدمين')],
+    ['audit.read', _t('عرض سجل التدقيق')], ['setup', _t('تهيئة المنصة')]]; };
+  var ACT_LBL = function (a) { return { 'score.edit': _t('تعديل درجة'), 'comment.edit': _t('تعديل ملاحظة'), 'status.change': _t('تغيير حالة الفترة'), 'year.add': _t('إضافة سنة'),
+    'employee.add': _t('إضافة موظف'), 'employee.save': _t('تعديل موظف'), 'criterion.add': _t('إضافة بند'), 'criterion.save': _t('تعديل بند'), 'bands.save': _t('تعديل فئات التقدير'),
+    'followup.save': _t('حفظ إجراء متابعة'), 'followup.delete': _t('حذف إجراء متابعة'), 'user.add': _t('إضافة مستخدم'), 'user.update': _t('تعديل مستخدم'), 'user.delete': _t('حذف مستخدم'),
+    'setup': _t('تهيئة المنصة'), 'scores.clear': _t('مسح درجات سنة'), 'denied': _t('محاولة غير مصرح بها') }[a] || a; };
+
+  function usersPane() {
+    var box = h('div', { id: 'usersPane' });
+    if (!S.users) {
+      box.appendChild(h('div', { class: 'card' }, _t('جارٍ التحميل…')));
+      call('apiUsers').then(function (u) { S.users = u; render(); }).catch(function (e) { fail(e); });
+      return box;
+    }
+    var U = S.users, emailIn = h('input', { type: 'text', id: 'uEmail', placeholder: 'name@sr.edu.sa', class: 'ltr', style: 'min-width:220px' }),
+      nameIn = h('input', { type: 'text', id: 'uName', placeholder: _t('الاسم') }),
+      roleSel = h('select', { id: 'uRole' }, ROLE_ORDER.map(function (r) { return h('option', { value: r, selected: r === 'viewer', text: ROLE_LBL(r) }); }));
+    function done(u) { S.users = u; render(); toast(_t('تم الحفظ')); }
+    var add = h('div', { class: 'card' }, h('h3', { text: _t('إضافة مستخدم') }),
+      h('div', { class: 'row' }, h('label', { class: 'f' }, _t('البريد الجامعي'), emailIn), h('label', { class: 'f' }, _t('الاسم'), nameIn), h('label', { class: 'f' }, _t('الدور'), roleSel),
+        h('button', { class: 'btn', id: 'uAdd', onclick: function () { call('apiSaveUser', { email: emailIn.value, name: nameIn.value, role: roleSel.value, active: true }).then(done).catch(fail); } }, _t('إضافة'))));
+    var rows = U.users.map(function (u) {
+      var locked = u.owner || u.me, st = { name: u.name, role: u.role, active: u.active, notes: u.notes };
+      var nm = h('input', { type: 'text', value: u.name, 'data-f': 'name', disabled: u.owner }), rl = h('select', { 'data-f': 'role', disabled: locked }, ROLE_ORDER.map(function (r) { return h('option', { value: r, selected: r === u.role, text: ROLE_LBL(r) }); })),
+        ac = h('input', { type: 'checkbox', checked: u.active, disabled: locked, 'data-f': 'active' }), nt = h('input', { type: 'text', value: u.notes, 'data-f': 'notes', disabled: u.owner, style: 'min-width:140px' });
+      var sv = h('button', { class: 'btn sm hide', 'data-save': u.email, onclick: function () {
+        call('apiSaveUser', { email: u.email, name: nm.value, role: rl.value, active: ac.checked, notes: nt.value }).then(done).catch(fail); } }, _t('حفظ'));
+      [nm, rl, ac, nt].forEach(function (el) { el.addEventListener('input', function () { sv.classList.remove('hide'); }); el.addEventListener('change', function () { sv.classList.remove('hide'); }); });
+      var del = locked ? null : h('button', { class: 'btn danger sm', 'data-del': u.email, onclick: function () {
+        if (confirm(_t('حذف المستخدم؟') + ' ' + u.email)) call('apiDeleteUser', u.email).then(done).catch(fail); } }, _t('حذف'));
+      return h('tr', { 'data-user': u.email, class: u.active ? '' : 'off' },
+        h('td', null, h('b', { class: 'ltr', text: u.email }), u.owner ? h('span', { class: 'badge final', style: 'margin-inline-start:6px', text: _t('المالك') }) : null, u.me ? h('span', { class: 'badge warn', style: 'margin-inline-start:6px', text: _t('أنت') }) : null),
+        h('td', null, nm), h('td', null, rl), h('td', null, ac), h('td', null, nt), h('td', { class: 'ltr', text: u.lastLogin ? u.lastLogin.slice(0, 16) : '—' }), h('td', null, h('div', { class: 'row' }, sv, del)));
+    });
+    var tbl = h('div', { class: 'card' }, h('h3', { text: _t('المستخدمون') + ' (' + U.users.length + ')' }),
+      h('div', { class: 'scroll' }, h('table', { class: 't', id: 'usersTbl' }, h('thead', null, h('tr', null, [_t('البريد الجامعي'), _t('الاسم'), _t('الدور'), _t('فعّال'), _t('ملاحظات'), _t('آخر دخول'), ''].map(function (x) { return h('th', { text: x }); }))), h('tbody', null, rows))),
+      h('p', { class: 'muted small', text: _t('الصلاحيات تُفرض على الخادم، والتغيير يسري فوراً. لا يمكنك تغيير دورك أو حذف حسابك، وحساب المالك ثابت. كل تغيير يُسجَّل في سجل التدقيق.') }));
+    var mh = h('tr', null, h('th', { text: _t('الصلاحية') }), ROLE_ORDER.map(function (r) { return h('th', { text: ROLE_LBL(r) }); }));
+    var mb = PERM_LBL().map(function (p) { return h('tr', null, h('td', { text: p[1] }), ROLE_ORDER.map(function (r) { var y = (U.perms[p[0]] || []).indexOf(r) !== -1; return h('td', { class: 'ctr' + (y ? ' yes' : ''), text: y ? '✓' : '—', 'aria-label': y ? _t('مسموح') : _t('غير مسموح') }); })); });
+    var matrix = h('div', { class: 'card' }, h('h3', { text: _t('مصفوفة الصلاحيات') }), h('div', { class: 'scroll' }, h('table', { class: 't', id: 'permTbl' }, h('thead', null, mh), h('tbody', null, mb))));
+    box.appendChild(add); box.appendChild(tbl); box.appendChild(matrix);
+    return box;
+  }
+
+  var AU = { f: { q: '', user: '', action: '', from: '', to: '' }, rows: null, total: 0, all: 0, users: [], actions: [], busy: false };
+  function auditLoad(more) {
+    if (AU.busy) return; AU.busy = true;
+    var f = Object.assign({}, AU.f, { limit: 200, offset: more ? AU.rows.length : 0 });
+    call('apiAudit', f).then(function (r) {
+      AU.rows = more ? AU.rows.concat(r.rows) : r.rows; AU.total = r.total; AU.all = r.all; AU.users = r.users; AU.actions = r.actions; AU.busy = false; render();
+    }).catch(function (e) { AU.busy = false; AU.rows = AU.rows || []; fail(e); render(); });
+  }
+  function empName(id) { var e = S.boot.employees.filter(function (x) { return x.id === id; })[0]; return e ? e.name : id; }
+  function auditTarget(r) { return [r.year, PNAME[r.period] || r.period, r.empId ? empName(r.empId) : '', r.ref].filter(function (x) { return x !== '' && x !== undefined; }).join(' · '); }
+  function exportAuditCsv() {
+    var head = ['at', 'by', 'role', 'action', 'entity', 'year', 'period', 'empId', 'ref', 'old', 'new', 'details'];
+    var csv = '﻿' + [head].concat((AU.rows || []).map(function (r) { return head.map(function (k) { return r[k]; }); })).map(function (r) { return r.map(function (x) { x = String(x === undefined ? '' : x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(','); }).join('\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'AuditLog_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+  }
+  function auditPane() {
+    if (AU.rows === null) { auditLoad(false); return h('div', { class: 'card' }, _t('جارٍ التحميل…')); }
+    var q = h('input', { type: 'text', id: 'aQ', value: AU.f.q, placeholder: _t('بحث'), onkeydown: function (e) { if (e.key === 'Enter') go(); } }),
+      us = h('select', { id: 'aUser' }, [h('option', { value: '', text: _t('الكل') })].concat(AU.users.map(function (u) { return h('option', { value: u, selected: u === AU.f.user, text: u }); }))),
+      ac = h('select', { id: 'aAct' }, [h('option', { value: '', text: _t('الكل') })].concat(AU.actions.map(function (a) { return h('option', { value: a, selected: a === AU.f.action, text: ACT_LBL(a) }); }))),
+      fr = h('input', { type: 'date', id: 'aFrom', value: AU.f.from }), to = h('input', { type: 'date', id: 'aTo', value: AU.f.to });
+    function go() { AU.f = { q: q.value.trim(), user: us.value, action: ac.value, from: fr.value, to: to.value }; AU.rows = null; render(); }
+    var body = (AU.rows || []).map(function (r) {
+      var chg = r.old !== '' || r.new !== '' ? h('span', { class: 'ltr' }, r.old === '' ? '∅' : r.old, ' → ', r.new === '' ? '∅' : r.new) : null;
+      return h('tr', { class: r.action === 'denied' ? 'overdue' : '', 'data-act': r.action },
+        h('td', { class: 'ltr', text: r.at }), h('td', null, h('span', { class: 'ltr', text: r.by }), ' ', r.role ? h('span', { class: 'badge draft', text: ROLE_LBL(r.role) }) : null),
+        h('td', { text: ACT_LBL(r.action) }), h('td', { text: auditTarget(r) }), h('td', null, chg), h('td', { text: r.details }));
+    });
+    return h('div', { id: 'auditPane' }, h('div', { class: 'card' }, h('h3', { text: _t('سجل التدقيق') }),
+      h('p', { class: 'muted small', text: _t('كل تغيير في البيانات والمستخدمين والصلاحيات، ومحاولات الوصول غير المصرح بها: من غيّر، ومتى، وماذا كانت القيمة قبل وبعد.') }),
+      h('div', { class: 'row' }, h('label', { class: 'f' }, _t('بحث'), q), h('label', { class: 'f' }, _t('المستخدم'), us), h('label', { class: 'f' }, _t('الإجراء'), ac), h('label', { class: 'f' }, _t('من تاريخ'), fr), h('label', { class: 'f' }, _t('إلى تاريخ'), to),
+        h('button', { class: 'btn', id: 'aGo', onclick: go }, _t('بحث')),
+        h('button', { class: 'btn sec', id: 'aReset', onclick: function () { AU.f = { q: '', user: '', action: '', from: '', to: '' }; AU.rows = null; render(); } }, _t('إعادة تعيين')),
+        h('span', { class: 'grow' }), h('button', { class: 'btn sec sm', id: 'aCsv', onclick: exportAuditCsv }, _t('تصدير CSV'))),
+      h('p', { class: 'small muted', id: 'aCount', text: _t('عرض ') + (AU.rows || []).length + _t(' من ') + AU.total + ' (' + _t('الإجمالي') + ' ' + AU.all + ')' }),
+      AU.rows && AU.rows.length ? h('div', { class: 'scroll' }, h('table', { class: 't', id: 'auditTbl' }, h('thead', null, h('tr', null, [_t('الوقت'), _t('المستخدم'), _t('الإجراء'), _t('الهدف'), _t('التغيير'), _t('تفاصيل')].map(function (x) { return h('th', { text: x }); }))), h('tbody', null, body)))
+        : h('div', { class: 'alert info', text: _t('لا توجد سجلات مطابقة.') }),
+      AU.rows && AU.rows.length < AU.total ? h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn sec', id: 'aMore', onclick: function () { auditLoad(true); } }, _t('تحميل المزيد'))) : null));
+  }
+
   function settingsPane() {
     var emps = S.boot.employees.slice();
     var erows = emps.map(function (e) { return empRow(e); });
