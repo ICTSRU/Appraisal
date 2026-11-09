@@ -2,7 +2,7 @@
   <div class="sru-support"><b>For Support:</b> Dial <span class="star">*</span> <span class="or">or</span> Send email to: <a href="mailto:servicedesk@sr.edu.sa">servicedesk@sr.edu.sa</a></div>
   <a class="sru-itoc" href="https://ictsru.github.io/ITOC/#forms" target="_blank" rel="noopener"><img id="logoItoc2" alt="ITOC — IT Operations Center"></a>
 </div>
-<div class="verbar"><span>الإدارة التنفيذية للاتصالات وتقنية المعلومات — جامعة سليمان الراجحي © 2026</span><span>الإصدار <span class="ver ltr" id="verBadge"></span></span></div></footer>
+<div class="verbar"><span><span data-i18n>الإدارة التنفيذية للاتصالات وتقنية المعلومات — جامعة سليمان الراجحي</span> © 2026</span><span><span data-i18n>الإصدار</span> <span class="ver ltr" id="verBadge"></span></span></div></footer>
 <script>
 (function(){
   var B = window.BOOT, L = window.ITOC_LOGOS || {};
@@ -10,7 +10,7 @@
   s('logoSru',L.sru); s('logoIctd',L.ictd); s('logoItoc',L.itoc); s('logoItoc2',L.itoc);
   var ROLE={admin:'مدير المنصة',evaluator:'مقيّم',cio:'تقييم الـ CIO',viewer:'اطلاع'};
   document.getElementById('whoName').textContent=B.userName||B.user;
-  document.getElementById('whoRole').textContent=ROLE[B.role]||B.role;
+  document.getElementById('whoRole').textContent=_t(ROLE[B.role]||B.role);
   document.getElementById('switchAcc').href=B.urls.switchUrl;
   document.getElementById('navIndex').href=B.urls.index; document.getElementById('navDash').href=B.urls.dashboard;
   document.getElementById(B.page==='dashboard'?'navDash':'navIndex').className='on';

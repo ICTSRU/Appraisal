@@ -1,5 +1,11 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.6 — 2026-11-09
+- **English / Arabic switch** (button in the header, remembered per browser; `?lang=en` also works) — full UI, report, dashboard, server messages; direction flips RTL↔LTR.
+- **Dark mode** (button in the header, follows the system by default); dashboard charts use a dark palette validated for colour-blind separation; printing/PDF is always light.
+- Criteria and domains are shown in ONE language only (Arabic in Arabic mode, English in English mode) — the English sub-line under every criterion/domain was removed.
+- New `apps-script/I18n.html` holds the dictionary (add new strings there). Test: `tools/test/i18n.test.js`.
+
 ## v1.5 — 2026-11-09
 - Empty-state fix: when the Sheet has no data the page shows «تهيئة وتحميل البيانات» (admin) which runs first-time setup from the page (`apiSetup`), with a clear error if Seed.gs is missing from the project.
 

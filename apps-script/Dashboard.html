@@ -3,22 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.5">
+<meta name="version" content="1.6">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
+<?!= include('I18n') ?>
 <style>
 :root{--s1:#7d52c4;--s2:#1b86c4}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px}
-.tile{background:#fff;border:1px solid var(--border);border-top:3px solid var(--purple);border-radius:var(--radius);padding:10px 14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--purple);border-radius:var(--radius);padding:10px 14px}
 .tile .l{color:var(--muted);font-size:.8rem}
-.tile .v{font-size:1.6rem;font-weight:800;color:var(--purple-dark);line-height:1.2}
+.tile .v{font-size:1.6rem;font-weight:800;color:var(--htext);line-height:1.2}
 .tile .s{font-size:.8rem;color:var(--muted)}
 .up{color:var(--ok);font-weight:700}.down{color:var(--bad);font-weight:700}
 .tile .v,.bars .val,.heat td,.up,.down{direction:ltr;unicode-bidi:isolate}
 .tile .v .band{direction:rtl}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media (max-width:900px){.grid2{grid-template-columns:1fr}}
-.bars .r{display:grid;grid-template-columns:110px 1fr 150px;gap:8px;align-items:center;margin-bottom:5px;font-size:.88rem}
+.bars .r{display:grid;grid-template-columns:150px 1fr 150px;gap:8px;align-items:center;margin-bottom:5px;font-size:.88rem}
 .bars .track{position:relative;background:#f0ebf8;height:16px;border-radius:0 2px 2px 0}
 .bars .fill{position:absolute;inset-block:0;inset-inline-start:0;background:var(--purple);border-radius:0 4px 4px 0}
 .bars .avg{position:absolute;inset-block:-3px;width:0;border-inline-start:2px dashed var(--ink)}
@@ -37,13 +38,13 @@ svg text{font-family:Arial,Cairo,sans-serif}
 .pill{display:inline-block;background:var(--purple-light);border-radius:999px;padding:0 8px;font-size:.78rem}
 </style>
 <?!= include('Brand') ?>
-<title>لوحة المؤشرات | SRU Performance Appraisal</title>
+<title data-i18n>لوحة المؤشرات | SRU Performance Appraisal</title>
 </head>
 <body>
 <?!= include('Logos') ?>
-<script>window.BOOT = <?!= bootJson ?>; BOOT.pageTitle = 'لوحة مؤشرات التقييم'; BOOT.pageSub = 'أداء الفريق، الاتجاه الربع سنوي، والمقارنة بين السنوات';</script>
+<script>window.BOOT = <?!= bootJson ?>; BOOT.pageTitle = _t('لوحة مؤشرات التقييم'); BOOT.pageSub = _t('أداء الفريق، الاتجاه الربع سنوي، والمقارنة بين السنوات');</script>
 <?!= include('Chrome') ?>
-<main><div class="wrap" id="app"><div class="card">جارٍ التحميل…</div></div></main>
+<main><div class="wrap" id="app"><div class="card" data-i18n>جارٍ التحميل…</div></div></main>
 <div id="tip" role="tooltip"></div>
 <?!= include('Footer') ?>
 
@@ -51,7 +52,8 @@ svg text{font-family:Arial,Cairo,sans-serif}
 (function () {
   'use strict';
   var B = window.BOOT, PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'];
-  var PN = { Q1: 'الربع 1', Q2: 'الربع 2', Q3: 'الربع 3', Q4: 'الربع 4' };
+  var PN = { Q1: _t('الربع 1'), Q2: _t('الربع 2'), Q3: _t('الربع 3'), Q4: _t('الربع 4') };
+  window.__onTheme = function () { if (D) render(); };
   var D = null, F = { year: null, cmp: null, drafts: true, sector: '' };
   var app = document.getElementById('app'), tip = document.getElementById('tip');
 
@@ -81,14 +83,15 @@ svg text{font-family:Arial,Cairo,sans-serif}
   function mean(a) { return a.length ? a.reduce(function (s, x) { return s + x; }, 0) / a.length : null; }
   function bands() { return D.bands.slice().sort(function (a, b) { return b.min - a.min; }); }
   function bandIdx(pct) { var b = bands(); for (var i = 0; i < b.length; i++) if (pct >= b[i].min) return i; return b.length - 1; }
-  function bandChip(i) { return i < 0 ? h('span', { class: 'muted small', text: 'غير مكتمل' }) : h('span', { class: 'band b' + Math.min(i, 4) }, bands()[i].ar); }
+  function bandChip(i) { return i < 0 ? h('span', { class: 'muted small', text: _t('غير مكتمل') }) : h('span', { class: 'band b' + Math.min(i, 4) }, bn(bands()[i])); }
   function showTip(ev, html) { tip.textContent = html; tip.style.display = 'block'; tip.style.left = Math.min(ev.clientX + 12, window.innerWidth - 270) + 'px'; tip.style.top = (ev.clientY + 14) + 'px'; }
   function hideTip() { tip.style.display = 'none'; }
   function hover(el, text) { el.addEventListener('mousemove', function (e) { showTip(e, text); }); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', function () { var r = el.getBoundingClientRect(); showTip({ clientX: r.left, clientY: r.top }, text); }); el.addEventListener('blur', hideTip); }
   function shade(pct) {
     var t = Math.max(0, Math.min(1, (pct - 50) / 50));
-    var a = [240, 235, 248], b = [80, 30, 140], c = a.map(function (x, i) { return Math.round(x + (b[i] - x) * t); });
-    return { bg: 'rgb(' + c.join(',') + ')', fg: t > 0.5 ? '#fff' : '#241436' };
+    var DK = window.THEME === 'dark';
+    var a = DK ? [47, 35, 70] : [240, 235, 248], b = DK ? [130, 86, 205] : [80, 30, 140], c = a.map(function (x, i) { return Math.round(x + (b[i] - x) * t); });
+    return { bg: 'rgb(' + c.join(',') + ')', fg: DK || t > 0.5 ? '#fff' : '#241436' };
   }
 
   /* ------------------------------ view model ----------------------------- */
@@ -115,8 +118,8 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var V = view(F.year), C = F.cmp && F.cmp !== F.year ? view(F.cmp) : null;
     app.innerHTML = '';
     app.appendChild(filters());
-    if (!V) { app.appendChild(h('div', { class: 'alert info', text: 'لا توجد بيانات.' })); return; }
-    if (F.drafts && V.drafts.length) app.appendChild(h('div', { class: 'alert warn', id: 'draftWarn' }, 'تتضمن الأرقام فترات ما زالت مسودة (' + V.drafts.map(function (p) { return PN[p]; }).join('، ') + ') — ألغِ «تضمين المسودات» لعرض الفترات المعتمدة فقط.'));
+    if (!V) { app.appendChild(h('div', { class: 'alert info', text: _t('لا توجد بيانات.') })); return; }
+    if (F.drafts && V.drafts.length) app.appendChild(h('div', { class: 'alert warn', id: 'draftWarn' }, _t('تتضمن الأرقام فترات ما زالت مسودة (') + V.drafts.map(function (p) { return PN[p]; }).join(_t('، ')) + _t(') — ألغِ «تضمين المسودات» لعرض الفترات المعتمدة فقط.')));
     app.appendChild(tiles(V, C));
     app.appendChild(h('div', { class: 'grid2' }, trendCard(V, C), distCard(V)));
     app.appendChild(rankCard(V, C));
@@ -129,13 +132,13 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var ys = Object.keys(D.years).map(Number).sort(function (a, b) { return a - b; });
     var ysel = h('select', { id: 'fYear', onchange: function () { F.year = Number(this.value); if (F.cmp === F.year) F.cmp = null; render(); } }, ys.map(function (y) { return h('option', { value: y, selected: y === F.year, text: String(y) }); }));
     var csel = h('select', { id: 'fCmp', onchange: function () { F.cmp = this.value ? Number(this.value) : null; render(); } },
-      h('option', { value: '', text: 'بدون مقارنة' }), ys.filter(function (y) { return y !== F.year; }).map(function (y) { return h('option', { value: y, selected: y === F.cmp, text: String(y) }); }));
+      h('option', { value: '', text: _t('بدون مقارنة') }), ys.filter(function (y) { return y !== F.year; }).map(function (y) { return h('option', { value: y, selected: y === F.cmp, text: String(y) }); }));
     var sc = sectors();
     return h('div', { class: 'card no-print' }, h('div', { class: 'row' },
-      h('label', { class: 'f' }, 'السنة', ysel), h('label', { class: 'f' }, 'مقارنة مع', csel),
-      sc.length ? h('label', { class: 'f' }, 'القطاع', h('select', { id: 'fSec', onchange: function () { F.sector = this.value; render(); } }, h('option', { value: '', text: 'الكل' }), sc.map(function (s) { return h('option', { value: s, selected: s === F.sector, text: s }); }))) : null,
-      h('label', { class: 'small', style: 'align-self:end;padding-bottom:6px' }, h('input', { type: 'checkbox', id: 'fDraft', checked: F.drafts, onchange: function () { F.drafts = this.checked; render(); } }), ' تضمين المسودات'),
-      h('span', { class: 'grow' }), h('button', { class: 'btn sec sm', onclick: function () { window.print(); } }, 'طباعة'), h('button', { class: 'btn sec sm', id: 'btnCsv', onclick: csv }, 'تصدير CSV')));
+      h('label', { class: 'f' }, _t('السنة'), ysel), h('label', { class: 'f' }, _t('مقارنة مع'), csel),
+      sc.length ? h('label', { class: 'f' }, _t('القطاع'), h('select', { id: 'fSec', onchange: function () { F.sector = this.value; render(); } }, h('option', { value: '', text: _t('الكل') }), sc.map(function (s) { return h('option', { value: s, selected: s === F.sector, text: s }); }))) : null,
+      h('label', { class: 'small', style: 'align-self:end;padding-bottom:6px' }, h('input', { type: 'checkbox', id: 'fDraft', checked: F.drafts, onchange: function () { F.drafts = this.checked; render(); } }), _t(' تضمين المسودات')),
+      h('span', { class: 'grow' }), h('button', { class: 'btn sec sm', onclick: function () { window.print(); } }, _t('طباعة')), h('button', { class: 'btn sec sm', id: 'btnCsv', onclick: csv }, _t('تصدير CSV'))));
   }
 
   function tiles(V, C) {
@@ -148,12 +151,12 @@ svg text{font-family:Arial,Cairo,sans-serif}
     function tile(l, v, s, id) { return h('div', { class: 'tile', id: id }, h('div', { class: 'l', text: l }), h('div', { class: 'v' }, v), h('div', { class: 's' }, s)); }
     var pct = V.avg === null ? null : V.avg / V.max * 100;
     return h('div', { class: 'tiles' },
-      tile('متوسط أداء الفريق (سنوي)', V.avg === null ? '—' : fmt(V.avg) + ' / ' + V.max, V.avg === null ? 'لا توجد تقييمات مكتملة' : bandChip(bandIdx(pct)), 'tAvg'),
-      tile('الأعلى أداءً', top ? fmt(V.annual[top].total) : '—', top ? emp(top).name : '', 'tTop'),
-      tile('الأقل أداءً', low ? fmt(V.annual[low].total) : '—', low ? emp(low).name : '', 'tLow'),
-      tile('اكتمال التقييمات', V.slots ? Math.round(V.done / V.slots * 100) + '%' : '—', V.done + ' من ' + V.slots + ' (موظف × ربع)', 'tDone'),
-      tile('التغير عن ' + (C ? C.year : 'السنة المقارنة'), delta === null ? '—' : h('span', { class: delta >= 0 ? 'up' : 'down' }, dlt(delta)), C ? 'متوسط الفرق للموظفين المشتركين' : 'اختر سنة للمقارنة', 'tDelta'),
-      tile('إجراءات المتابعة المفتوحة', String(open), over ? over + ' متأخر' : 'لا متأخر', 'tFollow'));
+      tile(_t('متوسط أداء الفريق (سنوي)'), V.avg === null ? '—' : fmt(V.avg) + ' / ' + V.max, V.avg === null ? _t('لا توجد تقييمات مكتملة') : bandChip(bandIdx(pct)), 'tAvg'),
+      tile(_t('الأعلى أداءً'), top ? fmt(V.annual[top].total) : '—', top ? emp(top).name : '', 'tTop'),
+      tile(_t('الأقل أداءً'), low ? fmt(V.annual[low].total) : '—', low ? emp(low).name : '', 'tLow'),
+      tile(_t('اكتمال التقييمات'), V.slots ? Math.round(V.done / V.slots * 100) + '%' : '—', V.done + _t(' من ') + V.slots + _t(' (موظف × ربع)'), 'tDone'),
+      tile(_t('التغير عن ') + (C ? C.year : _t('السنة المقارنة')), delta === null ? '—' : h('span', { class: delta >= 0 ? 'up' : 'down' }, dlt(delta)), C ? _t('متوسط الفرق للموظفين المشتركين') : _t('اختر سنة للمقارنة'), 'tDelta'),
+      tile(_t('إجراءات المتابعة المفتوحة'), String(open), over ? over + _t(' متأخر') : _t('لا متأخر'), 'tFollow'));
   }
 
   /* line chart: team average per quarter */
@@ -161,33 +164,33 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var series = [{ name: String(V.year), vals: V.teamQ, cls: '', col: 'var(--s1)' }];
     if (C) series.push({ name: String(C.year), vals: C.teamQ, dash: '6 4', col: 'var(--s2)' });
     var all = []; series.forEach(function (s) { s.vals.forEach(function (v) { if (v !== null) all.push(v); }); });
-    var card = h('div', { class: 'card', id: 'trendCard' }, h('h2', null, 'متوسط الفريق لكل ربع'));
-    if (!all.length) { card.appendChild(h('div', { class: 'muted', text: 'لا توجد تقييمات مكتملة.' })); return card; }
+    var card = h('div', { class: 'card', id: 'trendCard' }, h('h2', null, _t('متوسط الفريق لكل ربع')));
+    if (!all.length) { card.appendChild(h('div', { class: 'muted', text: _t('لا توجد تقييمات مكتملة.') })); return card; }
     var lo = Math.floor((Math.min.apply(null, all) - 3) / 5) * 5, hi = Math.min(V.max, Math.ceil((Math.max.apply(null, all) + 2) / 5) * 5);
     if (hi - lo < 10) lo = hi - 10;
-    var W = 560, H = 240, L = 40, R = 60, T = 14, Bm = 30;
+    var W = 560, H = 240, L = 40, R = 110, T = 14, Bm = 30;
     var x = function (i) { return L + (W - L - R) * i / 3; }, y = function (v) { return T + (H - T - Bm) * (1 - (v - lo) / (hi - lo)); };
-    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': 'متوسط درجات الفريق لكل ربع' });
+    var svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', role: 'img', 'aria-label': _t('متوسط درجات الفريق لكل ربع') });
     for (var g = lo; g <= hi; g += 5) {
-      svg.appendChild(sv('line', { x1: L, x2: W - R, y1: y(g), y2: y(g), stroke: '#e4dcf0', 'stroke-width': 1 }));
-      svg.appendChild(sv('text', { x: L - 6, y: y(g) + 4, 'text-anchor': 'end', 'font-size': 11, fill: '#6b5a80', text: g }));
+      svg.appendChild(sv('line', { x1: L, x2: W - R, y1: y(g), y2: y(g), stroke: window.THEME === 'dark' ? '#3a2d52' : '#e4dcf0', 'stroke-width': 1 }));
+      svg.appendChild(sv('text', { x: L - 6, y: y(g) + 4, 'text-anchor': 'end', 'font-size': 11, fill: window.THEME === 'dark' ? '#a99cc0' : '#6b5a80', text: g }));
     }
-    PERIODS.forEach(function (p, i) { svg.appendChild(sv('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: '#6b5a80', text: PN[p] })); });
+    PERIODS.forEach(function (p, i) { svg.appendChild(sv('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: window.THEME === 'dark' ? '#a99cc0' : '#6b5a80', text: PN[p] })); });
     series.forEach(function (s) {
       var pts = []; s.vals.forEach(function (v, i) { if (v !== null) pts.push([x(i), y(v), v, i]); });
       if (pts.length > 1) svg.appendChild(sv('polyline', { points: pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' '), fill: 'none', stroke: s.col, 'stroke-width': 2, 'stroke-dasharray': s.dash || '', 'stroke-linejoin': 'round' }));
       pts.forEach(function (p) {
-        svg.appendChild(sv('circle', { cx: p[0], cy: p[1], r: 4.5, fill: s.col, stroke: '#fff', 'stroke-width': 2 }));
+        svg.appendChild(sv('circle', { cx: p[0], cy: p[1], r: 4.5, fill: s.col, stroke: window.THEME === 'dark' ? '#221733' : '#fff', 'stroke-width': 2 }));
         var hit = sv('circle', { cx: p[0], cy: p[1], r: 14, fill: 'transparent', tabindex: 0, 'data-pt': s.name + '|' + p[3] }); hover(hit, s.name + ' — ' + PN[PERIODS[p[3]]] + ': ' + fmt(p[2])); svg.appendChild(hit);
       });
       var last = pts[pts.length - 1];
-      if (last) svg.appendChild(sv('text', { x: last[0] + 9, y: last[1] + 4, 'font-size': 11, 'font-weight': 700, fill: '#241436', text: s.name + ' · ' + fmt(last[2]) }));
+      if (last) svg.appendChild(sv('text', { x: last[0] + 9, y: last[1] + 4, 'font-size': 11, 'font-weight': 700, fill: window.THEME === 'dark' ? '#ece6f6' : '#241436', text: s.name + ' · ' + fmt(last[2]) }));
     });
     card.appendChild(svg);
     if (series.length > 1) card.appendChild(h('div', { class: 'legend' }, h('span', null, h('i'), String(V.year)), h('span', null, h('i', { class: 'd' }), String(C.year))));
-    var tbl = h('table', { class: 't hide', id: 'trendTbl' }, h('thead', null, h('tr', null, [h('th', { text: 'السنة' })].concat(PERIODS.map(function (p) { return h('th', { text: PN[p] }); })))),
+    var tbl = h('table', { class: 't hide', id: 'trendTbl' }, h('thead', null, h('tr', null, [h('th', { text: _t('السنة') })].concat(PERIODS.map(function (p) { return h('th', { text: PN[p] }); })))),
       h('tbody', null, series.map(function (s) { return h('tr', null, [h('td', { text: s.name })].concat(s.vals.map(function (v) { return h('td', { class: 'ltr', text: fmt(v) }); }))); })));
-    card.appendChild(h('button', { class: 'btn sec sm no-print', onclick: function () { tbl.classList.toggle('hide'); } }, 'عرض كجدول'));
+    card.appendChild(h('button', { class: 'btn sec sm no-print', onclick: function () { tbl.classList.toggle('hide'); } }, _t('عرض كجدول')));
     card.appendChild(tbl);
     return card;
   }
@@ -196,21 +199,21 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var bs = bands(), counts = bs.map(function () { return 0; });
     V.valid.forEach(function (id) { counts[V.annual[id].band]++; });
     var mx = Math.max.apply(null, counts.concat([1]));
-    var card = h('div', { class: 'card', id: 'distCard' }, h('h2', null, 'توزيع التقديرات (سنوي)'));
+    var card = h('div', { class: 'card', id: 'distCard' }, h('h2', null, _t('توزيع التقديرات (سنوي)')));
     bs.forEach(function (b, i) {
-      card.appendChild(h('div', { class: 'bars' }, h('div', { class: 'r', style: 'grid-template-columns:110px 1fr 40px' },
-        h('span', { class: 'band b' + Math.min(i, 4) }, b.ar + ' ', h('span', { class: 'ltr', text: '(≥' + b.min + '%)' })),
+      card.appendChild(h('div', { class: 'bars' }, h('div', { class: 'r', style: 'grid-template-columns:150px 1fr 40px' },
+        h('span', { class: 'band b' + Math.min(i, 4) }, bn(b) + ' ', h('span', { class: 'ltr', text: '(≥' + b.min + '%)' })),
         h('div', { class: 'track' }, h('div', { class: 'fill', style: 'width:' + (counts[i] / mx * 100) + '%' })), h('span', { class: 'val', text: counts[i] }))));
     });
     var inc = V.ids.length - V.valid.length;
-    if (inc) card.appendChild(h('div', { class: 'muted small', text: inc + ' موظف بتقييم سنوي غير مكتمل (غير محتسبين).' }));
+    if (inc) card.appendChild(h('div', { class: 'muted small', text: inc + _t(' موظف بتقييم سنوي غير مكتمل (غير محتسبين).') }));
     return card;
   }
 
   function rankCard(V, C) {
     var rows = V.valid.slice().sort(function (a, b) { return V.annual[b].total - V.annual[a].total; });
-    var card = h('div', { class: 'card', id: 'rankCard' }, h('h2', null, 'ترتيب الموظفين — الدرجة السنوية ' + V.year),
-      h('div', { class: 'legend' }, h('span', null, '▮ الدرجة'), h('span', null, '┆ متوسط الفريق'), C ? h('span', null, h('b', { style: 'color:var(--s2)' }, '▮'), ' ' + C.year) : null));
+    var card = h('div', { class: 'card', id: 'rankCard' }, h('h2', null, _t('ترتيب الموظفين — الدرجة السنوية ') + V.year),
+      h('div', { class: 'legend' }, h('span', null, _t('▮ الدرجة')), h('span', null, _t('┆ متوسط الفريق')), C ? h('span', null, h('b', { style: 'color:var(--s2)' }, '▮'), ' ' + C.year) : null));
     var bars = h('div', { class: 'bars' });
     rows.forEach(function (id) {
       var a = V.annual[id], w = a.total / V.max * 100, tr = h('div', { class: 'track' }, h('div', { class: 'fill', style: 'width:' + w + '%' }));
@@ -220,75 +223,75 @@ svg text{font-family:Arial,Cairo,sans-serif}
       hover(r, emp(id).name + ': ' + fmt(a.total) + ' / ' + V.max + (C && C.annual[id] && C.annual[id].complete ? ' — ' + C.year + ': ' + fmt(C.annual[id].total) : ''));
       bars.appendChild(r);
     });
-    if (!rows.length) bars.appendChild(h('div', { class: 'muted', text: 'لا توجد تقييمات سنوية مكتملة.' }));
+    if (!rows.length) bars.appendChild(h('div', { class: 'muted', text: _t('لا توجد تقييمات سنوية مكتملة.') }));
     card.appendChild(bars);
     return card;
   }
 
   function tableCard(V, C) {
-    var head = h('tr', null, ['الموظف'].concat(PERIODS.map(function (p) { return PN[p]; }), ['السنوي', 'التقدير', C ? 'الفرق عن ' + C.year : null]).filter(Boolean).map(function (x) { return h('th', { text: x }); }));
+    var head = h('tr', null, [_t('الموظف')].concat(PERIODS.map(function (p) { return PN[p]; }), [_t('السنوي'), _t('التقدير'), C ? _t('الفرق عن ') + C.year : null]).filter(Boolean).map(function (x) { return h('th', { text: x }); }));
     var body = V.ids.map(function (id) {
       var a = V.annual[id], tds = [h('td', { class: 'n' }, h('b', { text: emp(id).name }))];
       PERIODS.forEach(function (p) {
         var r = V.comp.periods[p][id], s = shade(r.pct);
-        tds.push(h('td', { style: r.n ? 'background:' + s.bg + ';color:' + s.fg : '', title: r.n ? (r.complete ? '' : 'ناقص ' + r.n + '/' + r.of) : '' }, r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—'));
+        tds.push(h('td', { style: r.n ? 'background:' + s.bg + ';color:' + s.fg : '', title: r.n ? (r.complete ? '' : _t('ناقص ') + r.n + '/' + r.of) : '' }, r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—'));
       });
-      var sa = shade(a.pct); tds.push(h('td', { style: a.n ? 'background:' + sa.bg + ';color:' + sa.fg + ';font-weight:700' : '', title: a.complete && !a.fullYear ? 'سنة غير مكتملة الأرباع' : '' }, a.n ? fmt(a.total) + (a.complete ? (a.fullYear ? '' : ' †') : ' *') : '—'));
+      var sa = shade(a.pct); tds.push(h('td', { style: a.n ? 'background:' + sa.bg + ';color:' + sa.fg + ';font-weight:700' : '', title: a.complete && !a.fullYear ? _t('سنة غير مكتملة الأرباع') : '' }, a.n ? fmt(a.total) + (a.complete ? (a.fullYear ? '' : ' †') : ' *') : '—'));
       tds.push(h('td', null, bandChip(a.band)));
       if (C) { var c = C.annual[id], d = c && c.complete && a.complete ? a.total - c.total : null; tds.push(h('td', { class: d === null ? '' : d >= 0 ? 'up' : 'down' }, dlt(d))); }
       return h('tr', { 'data-row': id }, tds);
     });
-    var teamRow = h('tr', null, [h('td', { class: 'n' }, h('b', { text: 'متوسط الفريق' }))].concat(V.teamQ.map(function (v) { return h('td', { text: fmt(v) }); }), [h('td', { text: fmt(V.avg) }), h('td', null, V.avg === null ? '' : bandChip(bandIdx(V.avg / V.max * 100)))], C ? [h('td')] : []));
-    return h('div', { class: 'card', id: 'tableCard' }, h('h2', null, 'درجات الموظفين لكل ربع'),
-      h('p', { class: 'muted small', text: 'التظليل الأغمق = درجة أعلى (من 50% إلى 100%). * = تقييم غير مكتمل ولا يدخل في المتوسطات. † = سنة لم تكتمل أرباعها (المتوسط على الأرباع المقيّمة).' }),
+    var teamRow = h('tr', null, [h('td', { class: 'n' }, h('b', { text: _t('متوسط الفريق') }))].concat(V.teamQ.map(function (v) { return h('td', { text: fmt(v) }); }), [h('td', { text: fmt(V.avg) }), h('td', null, V.avg === null ? '' : bandChip(bandIdx(V.avg / V.max * 100)))], C ? [h('td')] : []));
+    return h('div', { class: 'card', id: 'tableCard' }, h('h2', null, _t('درجات الموظفين لكل ربع')),
+      h('p', { class: 'muted small', text: _t('التظليل الأغمق = درجة أعلى (من 50% إلى 100%). * = تقييم غير مكتمل ولا يدخل في المتوسطات. † = سنة لم تكتمل أرباعها (المتوسط على الأرباع المقيّمة).') }),
       h('div', { class: 'scroll' }, h('table', { class: 't heat', id: 'empTable' }, h('thead', null, head), h('tbody', null, body, teamRow))));
   }
 
   /* competence heat map + strengths / gaps */
   function heatCard(V) {
     var groups = [], seen = {};
-    V.active.forEach(function (c) { if (!seen[c.compEn]) { seen[c.compEn] = { ar: c.compAr || c.compEn, items: [] }; groups.push(seen[c.compEn]); } seen[c.compEn].items.push(c); });
+    V.active.forEach(function (c) { if (!seen[c.compEn]) { seen[c.compEn] = { ar: gn(c), items: [] }; groups.push(seen[c.compEn]); } seen[c.compEn].items.push(c); });
     function pctOf(id, g) {
       var its = g.items.filter(function (c) { return V.annual[id].items[c.id] !== undefined; });
       if (!its.length) return null;
       return its.reduce(function (s, c) { return s + V.annual[id].items[c.id]; }, 0) / its.reduce(function (s, c) { return s + c.max; }, 0) * 100;
     }
     var ids = V.valid;
-    var head = h('tr', null, [h('th', { text: 'الموظف' })].concat(groups.map(function (g) { return h('th', { text: g.ar }); })));
+    var head = h('tr', null, [h('th', { text: _t('الموظف') })].concat(groups.map(function (g) { return h('th', { text: g.ar }); })));
     var body = ids.map(function (id) {
       return h('tr', null, [h('td', { class: 'n', text: emp(id).name })].concat(groups.map(function (g) { var p = pctOf(id, g), s = shade(p === null ? 0 : p); return h('td', { style: p === null ? '' : 'background:' + s.bg + ';color:' + s.fg, text: p === null ? '—' : Math.round(p) + '%' }); })));
     });
     var team = groups.map(function (g) { return mean(ids.map(function (id) { return pctOf(id, g); }).filter(function (v) { return v !== null; })); });
-    var trow = h('tr', null, [h('td', { class: 'n' }, h('b', { text: 'متوسط الفريق' }))].concat(team.map(function (v) { var s = shade(v || 0); return h('td', { style: v === null ? '' : 'background:' + s.bg + ';color:' + s.fg + ';font-weight:700', text: v === null ? '—' : Math.round(v) + '%' }); })));
+    var trow = h('tr', null, [h('td', { class: 'n' }, h('b', { text: _t('متوسط الفريق') }))].concat(team.map(function (v) { var s = shade(v || 0); return h('td', { style: v === null ? '' : 'background:' + s.bg + ';color:' + s.fg + ';font-weight:700', text: v === null ? '—' : Math.round(v) + '%' }); })));
     // item level
     var items = V.active.map(function (c) { var v = mean(ids.map(function (id) { return V.annual[id].items[c.id]; }).filter(function (x) { return x !== undefined; })); return { c: c, p: v === null ? null : v / c.max * 100 }; }).filter(function (x) { return x.p !== null; });
     items.sort(function (a, b) { return b.p - a.p; });
     var strong = items.slice(0, 3), weak = items.slice(-3).reverse();
-    function li(x) { return h('li', null, x.c.ar || x.c.en, ' ', h('span', { class: 'pill ltr', text: Math.round(x.p) + '%' })); }
-    return h('div', { class: 'card', id: 'heatCard' }, h('h2', null, 'الكفاءات — متوسط الأداء السنوي لكل مجال (% من الدرجة العظمى)'),
-      ids.length ? h('div', { class: 'scroll' }, h('table', { class: 't heat', id: 'compTable' }, h('thead', null, head), h('tbody', null, body, trow))) : h('div', { class: 'muted', text: 'لا توجد تقييمات سنوية مكتملة.' }),
-      items.length ? h('div', { class: 'grid2', style: 'margin-top:12px' }, h('div', null, h('h3', null, 'أقوى البنود'), h('ul', { class: 'list', id: 'strong' }, strong.map(li))), h('div', null, h('h3', null, 'أكثر البنود حاجة للتطوير'), h('ul', { class: 'list', id: 'weak' }, weak.map(li)))) : null);
+    function li(x) { return h('li', null, cn(x.c), ' ', h('span', { class: 'pill ltr', text: Math.round(x.p) + '%' })); }
+    return h('div', { class: 'card', id: 'heatCard' }, h('h2', null, _t('الكفاءات — متوسط الأداء السنوي لكل مجال (% من الدرجة العظمى)')),
+      ids.length ? h('div', { class: 'scroll' }, h('table', { class: 't heat', id: 'compTable' }, h('thead', null, head), h('tbody', null, body, trow))) : h('div', { class: 'muted', text: _t('لا توجد تقييمات سنوية مكتملة.') }),
+      items.length ? h('div', { class: 'grid2', style: 'margin-top:12px' }, h('div', null, h('h3', null, _t('أقوى البنود')), h('ul', { class: 'list', id: 'strong' }, strong.map(li))), h('div', null, h('h3', null, _t('أكثر البنود حاجة للتطوير')), h('ul', { class: 'list', id: 'weak' }, weak.map(li)))) : null);
   }
 
   function yoyCard() {
     var ys = Object.keys(D.years).map(Number).sort(function (a, b) { return a - b; });
     var vs = ys.map(view);
     var ids = D.employees.filter(function (e) { return (!F.sector || e.sector === F.sector) && vs.some(function (v) { return v && v.annual[e.id]; }); }).map(function (e) { return e.id; });
-    var head = h('tr', null, [h('th', { text: 'الموظف' })].concat(ys.map(function (y) { return h('th', { text: String(y) }); }), [h('th', { text: 'آخر تغير' })]));
+    var head = h('tr', null, [h('th', { text: _t('الموظف') })].concat(ys.map(function (y) { return h('th', { text: String(y) }); }), [h('th', { text: _t('آخر تغير') })]));
     var body = ids.map(function (id) {
       var vals = vs.map(function (v) { var a = v && v.annual[id]; return a && a.complete ? a.total : null; });
       var seq = vals.filter(function (x) { return x !== null; }), d = seq.length > 1 ? seq[seq.length - 1] - seq[seq.length - 2] : null;
       return h('tr', null, [h('td', { class: 'n', text: emp(id).name })].concat(vals.map(function (v) { var s = v === null ? null : shade(v / (vs[0] ? vs[0].max : 100) * 100); return h('td', { style: s ? 'background:' + s.bg + ';color:' + s.fg : '', text: fmt(v) }); }),
         [h('td', { class: d === null ? '' : d >= 0 ? 'up' : 'down', text: dlt(d) })]));
     });
-    return h('div', { class: 'card', id: 'yoyCard' }, h('h2', null, 'المقارنة بين السنوات (الدرجة السنوية)'), h('div', { class: 'scroll' }, h('table', { class: 't heat', id: 'yoyTable' }, h('thead', null, head), h('tbody', null, body))));
+    return h('div', { class: 'card', id: 'yoyCard' }, h('h2', null, _t('المقارنة بين السنوات (الدرجة السنوية)')), h('div', { class: 'scroll' }, h('table', { class: 't heat', id: 'yoyTable' }, h('thead', null, head), h('tbody', null, body))));
   }
 
   function csv() {
     var V = view(F.year), rows = [['year', 'employee', 'Q1', 'Q2', 'Q3', 'Q4', 'annual', 'annual_pct', 'band', 'complete']];
     V.ids.forEach(function (id) {
       var a = V.annual[id];
-      rows.push([V.year, emp(id).name].concat(PERIODS.map(function (p) { var r = V.comp.periods[p][id]; return r.n ? r.total : ''; }), [a.n ? a.total : '', a.n ? a.pct : '', a.complete ? bands()[a.band].ar : '', a.complete]));
+      rows.push([V.year, emp(id).name].concat(PERIODS.map(function (p) { var r = V.comp.periods[p][id]; return r.n ? r.total : ''; }), [a.n ? a.total : '', a.n ? a.pct : '', a.complete ? bn(bands()[a.band]) : '', a.complete]));
     });
     var txt = '﻿' + rows.map(function (r) { return r.map(function (x) { x = String(x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(','); }).join('\n');
     var a = h('a', { href: URL.createObjectURL(new Blob([txt], { type: 'text/csv' })), download: 'dashboard_' + V.year + '.csv' });
@@ -303,7 +306,7 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var q = Number(B.params.year); F.year = ys.indexOf(q) !== -1 ? q : withData[withData.length - 1];
     var earlier = withData.filter(function (y) { return y < F.year; }); F.cmp = earlier.length ? earlier[earlier.length - 1] : null;
     render();
-  }).catch(function (e) { app.innerHTML = ''; app.appendChild(h('div', { class: 'alert err', text: 'تعذر التحميل: ' + (e && e.message || e) })); });
+  }).catch(function (e) { app.innerHTML = ''; app.appendChild(h('div', { class: 'alert err', text: _t('تعذر التحميل: ') + _m(e && e.message || e) })); });
 })();
 </script>
 </body>
