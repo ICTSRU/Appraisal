@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="version" content="1.1">
+<?!= include('Header') ?>
+<?!= include('Style') ?>
+<style>
+.matrix{border-collapse:separate;border-spacing:0;font-size:.85rem}
+.matrix th,.matrix td{border-bottom:1px solid var(--border);border-inline-start:1px solid var(--border);padding:3px 6px;background:#fff}
+.matrix thead th{position:sticky;top:0;background:var(--purple-light);color:var(--purple-dark);z-index:3;font-size:.8rem;text-align:center}
+.matrix .c-grp{min-width:130px;max-width:150px;background:#faf8fd;font-weight:700;color:var(--purple-dark);position:sticky;inset-inline-start:0;z-index:2}
+.matrix .c-crit{min-width:260px;max-width:340px;position:sticky;inset-inline-start:130px;z-index:2}
+.matrix .c-max{text-align:center;color:var(--muted);width:48px}
+.matrix td.cell{text-align:center;padding:2px}
+.matrix input{width:58px;text-align:center;padding:2px 2px;min-height:30px;border-color:rgba(80,30,140,.18)}
+.matrix input:disabled{background:#f3f0f8;color:var(--muted)}
+.matrix input.dirty{background:#fff8e6;border-color:var(--warn)}
+.matrix input.bad{background:#fdecea;border-color:var(--bad)}
+.matrix tfoot td{background:var(--purple-light);font-weight:700;text-align:center;position:sticky;bottom:0}
+.matrix tfoot td.lbl{text-align:start}
+.en{direction:ltr;unicode-bidi:isolate;font-size:.74rem;color:var(--muted);font-family:Arial,sans-serif;text-align:left}
+.empnav{display:flex;flex-direction:column;gap:4px;min-width:180px}
+.empnav button{text-align:start;border:1px solid var(--border);background:#fff;border-radius:var(--radius);padding:6px 10px;cursor:pointer;font:inherit}
+.empnav button.on{border-color:var(--purple);background:var(--purple-light);font-weight:700}
+.crit{border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;background:#fff}
+.crit.cio{border-inline-start:4px solid var(--blue)}
+.rate{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.rate button{min-width:38px;min-height:36px;border:1px solid rgba(80,30,140,.3);background:#fff;border-radius:var(--radius);font:700 .95rem Arial,sans-serif;cursor:pointer;color:var(--purple)}
+.rate button.on{background:var(--purple);color:#fff;border-color:var(--purple)}
+.rate button.dirty{box-shadow:0 0 0 2px var(--warn)}
+.rate button:disabled{opacity:.5;cursor:not-allowed}
+.kpi{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.kpi .k{background:var(--purple-light);border-radius:var(--radius);padding:6px 14px;min-width:120px}
+.kpi .k b{display:block;font-size:1.25rem;color:var(--purple-dark);direction:ltr;unicode-bidi:isolate;text-align:start}
+.matrix tfoot td{direction:ltr;unicode-bidi:isolate}
+.split{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+@media (max-width:760px){.split{grid-template-columns:1fr}.empnav{flex-direction:row;flex-wrap:wrap}}
+.cellbtn{border:1px solid var(--border);background:#fff;border-radius:var(--radius);padding:3px 10px;cursor:pointer;font:inherit;min-width:92px}
+.cellbtn:hover{background:var(--purple-light)}
+td.overdue{background:#fdecea}
+</style>
+<?!= include('Brand') ?>
+<title>التقييم والمتابعة | SRU Performance Appraisal</title>
+</head>
+<body>
+<?!= include('Logos') ?>
+<script>window.BOOT = <?!= bootJson ?>; BOOT.pageTitle = 'التقييم والمتابعة'; BOOT.pageSub = 'تقييم الأداء الربع سنوي والسنوي — إدخال الدرجات، المتابعة، وإدارة السنوات';</script>
+<?!= include('Chrome') ?>
+<main><div class="wrap" id="app">
+  <div class="card" id="loading">جارٍ التحميل…</div>
+</div></main>
+<?!= include('Footer') ?>
+
+<script>
+(function () {
+  'use strict';
+  var B = window.BOOT, PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'];
+  var PNAME = { Q1: 'الربع الأول', Q2: 'الربع الثاني', Q3: 'الربع الثالث', Q4: 'الربع الرابع', ANNUAL: 'السنوي' };
+  var S = { boot: null, year: null, data: null, period: 'Q1', tab: 'eval', view: 'matrix', emp: null, dirty: {}, invalid: {}, cdirty: {}, onlyOpen: true };
+  var app = document.getElementById('app');
+
+  /* ------------------------------ helpers ------------------------------ */
+  function h(tag, props) {
+    var e = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function (k) {
+      var v = props[k];
+      if (v === undefined || v === null || v === false) return;
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else if (k === 'value') e.value = v;
+      else if (k === 'checked' || k === 'disabled' || k === 'selected') e[k] = !!v;
+      else e.setAttribute(k, v === true ? '' : v);
+    });
+    for (var i = 2; i < arguments.length; i++) add(e, arguments[i]);
+    return e;
+  }
+  function add(e, c) {
+    if (c === undefined || c === null || c === false) return;
+    if (Array.isArray(c)) c.forEach(function (x) { add(e, x); });
+    else e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
+  }
+  function call(fn) {
+    var args = [].slice.call(arguments, 1);
+    return new Promise(function (ok, no) {
+      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { no(e); });
+      r[fn].apply(r, args);
+    });
+  }
+  function toast(msg, err) {
+    var t = h('div', { class: 'toast' + (err ? ' err' : ''), role: 'status', text: msg });
+    document.body.appendChild(t); setTimeout(function () { t.remove(); }, err ? 6000 : 2800);
+  }
+  function fail(e) { toast((e && e.message) ? e.message.replace(/^Error:\s*/, '') : String(e), true); }
+  function fmt(n) { return n === undefined || n === null ? '—' : String(Math.round(n * 100) / 100); }
+  function normNum(s) {
+    s = String(s).trim().replace(/[٠-٩]/g, function (d) { return d.charCodeAt(0) - 1632; }).replace(/[٫,]/g, '.');
+    return s;
+  }
+  function bandsSorted() { return S.boot.bands.slice().sort(function (a, b) { return b.min - a.min; }); }
+  function bandIdx(pct) { var b = bandsSorted(); for (var i = 0; i < b.length; i++) if (pct >= b[i].min) return i; return b.length - 1; }
+  function bandChip(idx) {
+    if (idx < 0) return h('span', { class: 'muted small', text: 'غير مكتمل' });
+    var b = bandsSorted()[idx];
+    return h('span', { class: 'band b' + Math.min(idx, 4) }, b.ar);
+  }
+  function isDirty() { return Object.keys(S.dirty).length > 0 || Object.keys(S.cdirty).length > 0; }
+
+  /* ------------------------------ data access -------------------------- */
+  function crits() { return S.data.criteria.filter(function (c) { return c.active; }); }
+  function key(p, e, c) { return p + '|' + e + '|' + c; }
+  function getScore(p, e, c) {
+    var k = key(p, e, c);
+    if (k in S.dirty) return S.dirty[k];
+    var v = S.data.scores[k]; return v === undefined ? null : v;
+  }
+  function pStatus(p) { var x = S.data.periods[p]; return x ? x.status : 'draft'; }
+  function canEdit(p, c) {
+    if (p === 'ANNUAL') return false;
+    var r = B.role;
+    if (r === 'admin') return true;
+    if (pStatus(p) === 'final') return false;
+    if (r === 'evaluator') return c.by === 'manager';
+    if (r === 'cio') return c.by === 'cio';
+    return false;
+  }
+  function canEditComment(p) { return B.role === 'admin' || (B.role === 'evaluator' && pStatus(p) !== 'final'); }
+  function canFollow() { return ['admin', 'evaluator', 'cio'].indexOf(B.role) !== -1; }
+  function totals(p, e) {
+    var t = 0, n = 0, max = 0, cs = crits();
+    cs.forEach(function (c) { max += c.max; var v = getScore(p, e, c.id); if (v !== null && v !== '') { t += Number(v); n++; } });
+    var complete = n === cs.length && n > 0, pct = max ? t / max * 100 : 0;
+    return { total: t, max: max, n: n, of: cs.length, complete: complete, pct: pct, band: complete ? bandIdx(pct) : -1 };
+  }
+  function setScore(p, e, c, v) {
+    var k = key(p, e, c), saved = S.data.scores[k];
+    var same = (v === null && saved === undefined) || (v !== null && saved !== undefined && Number(saved) === Number(v));
+    if (same) delete S.dirty[k]; else S.dirty[k] = v;
+  }
+
+  /* ------------------------------ boot --------------------------------- */
+  function start() {
+    call('apiBoot').then(function (b) {
+      S.boot = b;
+      var y = Number(B.params.year);
+      S.year = b.years.indexOf(y) !== -1 ? y : b.years[b.years.length - 1];
+      if (B.params.period && (PERIODS.indexOf(B.params.period) !== -1 || B.params.period === 'ANNUAL')) S.period = B.params.period;
+      return loadYear(S.year, true);
+    }).catch(function (e) { app.innerHTML = ''; app.appendChild(h('div', { class: 'alert err', text: 'تعذر التحميل: ' + (e && e.message || e) })); });
+  }
+  function loadYear(y, pickPeriod) {
+    return call('apiYear', y).then(function (d) {
+      S.data = d; S.year = y;
+      if (pickPeriod && !B.params.period) {
+        var last = 'Q1';
+        PERIODS.forEach(function (p) { if (Object.keys(d.scores).some(function (k) { return k.indexOf(p + '|') === 0; })) last = p; });
+        S.period = last;
+      }
+      if (!S.emp || !d.employees.some(function (e) { return e.id === S.emp; })) S.emp = d.employees.length ? d.employees[0].id : null;
+      render();
+    });
+  }
+  function applyData(d) { S.data = d; render(); }
+
+  /* ------------------------------ render ------------------------------- */
+  function render() {
+    app.innerHTML = '';
+    app.appendChild(toolbar());
+    var tabs = [['eval', 'التقييم'], ['follow', 'المتابعة'], ['settings', 'الإعدادات']];
+    if (B.role !== 'admin') tabs.pop();
+    app.appendChild(h('div', { class: 'tabs no-print', style: 'margin-bottom:12px', role: 'tablist' },
+      tabs.map(function (t) { return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), role: 'tab', 'data-tab': t[0], onclick: function () { S.tab = t[0]; render(); } }, t[1]); })));
+    var pane = h('div', { id: 'pane' });
+    app.appendChild(pane);
+    if (S.tab === 'eval') pane.appendChild(S.period === 'ANNUAL' ? annualPane() : (S.view === 'matrix' ? matrixPane() : employeePane()));
+    else if (S.tab === 'follow') pane.appendChild(followPane());
+    else pane.appendChild(settingsPane());
+    app.appendChild(saveBar());
+  }
+
+  function toolbar() {
+    var yearSel = h('select', { id: 'yearSel', 'aria-label': 'السنة', onchange: function () {
+      if (isDirty() && !confirm('توجد تعديلات غير محفوظة سيتم تجاهلها. متابعة؟')) { this.value = S.year; return; }
+      S.dirty = {}; S.cdirty = {}; S.invalid = {}; loadYear(Number(this.value)).catch(fail);
+    } }, S.boot.years.map(function (y) { return h('option', { value: y, selected: y === S.year }, String(y)); }));
+    var per = h('div', { class: 'tabs', role: 'tablist' }, PERIODS.concat(['ANNUAL']).map(function (p) {
+      var st = p === 'ANNUAL' ? '' : pStatus(p);
+      return h('button', { class: 'tab' + (S.period === p ? ' on' : ''), 'data-period': p, onclick: function () { S.period = p; render(); } },
+        PNAME[p], p === 'ANNUAL' ? null : h('span', { class: 'dot ' + st, title: st === 'final' ? 'معتمد' : 'مسودة' }));
+    }));
+    var statusBox = null;
+    if (S.period !== 'ANNUAL') {
+      var st = pStatus(S.period), meta = S.data.periods[S.period] || {};
+      statusBox = h('div', { class: 'row' },
+        h('span', { class: 'badge ' + st, id: 'stBadge', text: st === 'final' ? 'معتمد' : 'مسودة' }),
+        meta.note ? h('span', { class: 'muted small', text: meta.note }) : null,
+        B.role === 'admin' ? (st === 'draft'
+          ? h('button', { class: 'btn sm', id: 'btnFinal', onclick: function () { setStatus('final'); } }, 'اعتماد الفترة')
+          : h('button', { class: 'btn sm sec', id: 'btnReopen', onclick: function () { reopenModal(); } }, 'إعادة فتح للتعديل')) : null);
+    }
+    return h('div', { class: 'card no-print' },
+      h('div', { class: 'row' },
+        h('label', { class: 'f' }, 'السنة', yearSel),
+        B.role === 'admin' ? h('button', { class: 'btn sec sm', id: 'btnAddYear', onclick: addYearModal }, '＋ إضافة سنة') : null,
+        h('div', { class: 'grow' }, per),
+        S.tab === 'eval' && S.period !== 'ANNUAL' ? h('div', { class: 'tabs' },
+          h('button', { class: 'tab' + (S.view === 'matrix' ? ' on' : ''), id: 'vMatrix', onclick: function () { S.view = 'matrix'; render(); } }, 'مصفوفة'),
+          h('button', { class: 'tab' + (S.view === 'emp' ? ' on' : ''), id: 'vEmp', onclick: function () { S.view = 'emp'; render(); } }, 'موظف موظف')) : null),
+      statusBox ? h('div', { style: 'margin-top:8px' }, statusBox) : null,
+      S.data.periods.Q1 && Object.keys(S.data.periods).some(function (p) { return (S.data.periods[p].note || '').indexOf('يحتاج مراجعة') !== -1 && S.period === p; })
+        ? h('div', { class: 'alert warn', style: 'margin-top:8px;margin-bottom:0' }, 'بيانات هذه الفترة مستوردة من الملف الأصلي وما زالت مسودة — راجعها ثم اعتمدها.') : null);
+  }
+
+  /* ---------- matrix ---------- */
+  function matrixPane() {
+    var p = S.period, emps = S.data.employees, cs = crits();
+    if (!emps.length) return h('div', { class: 'alert info', text: 'لا يوجد موظفون.' });
+    var head = h('tr', null, h('th', { class: 'c-grp' }, 'المجال'), h('th', { class: 'c-crit' }, 'البند'), h('th', { class: 'c-max' }, 'الدرجة'),
+      emps.map(function (e) { return h('th', { title: e.fullName || e.name }, e.name); }));
+    var tbody = h('tbody');
+    var i = 0;
+    while (i < cs.length) {
+      var j = i; while (j + 1 < cs.length && cs[j + 1].compEn === cs[i].compEn) j++;
+      for (var r = i; r <= j; r++) {
+        var c = cs[r], tr = h('tr', { 'data-crit': c.id });
+        if (r === i) tr.appendChild(h('td', { class: 'c-grp', rowspan: j - i + 1 }, c.compAr || c.compEn, h('div', { class: 'en', text: c.compEn })));
+        tr.appendChild(h('td', { class: 'c-crit' }, h('span', { text: c.ar || c.en }), c.by === 'cio' ? h('span', { class: 'badge warn', style: 'margin-inline-start:6px', text: 'CIO' }) : null, h('div', { class: 'en', text: c.en })));
+        tr.appendChild(h('td', { class: 'c-max', text: c.max }));
+        emps.forEach(function (e) {
+          var v = getScore(p, e.id, c.id), k = key(p, e.id, c.id);
+          var inp = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', value: v === null ? '' : v, disabled: !canEdit(p, c),
+            'data-e': e.id, 'data-c': c.id, 'aria-label': e.name + ' — ' + (c.ar || c.en), class: (k in S.dirty ? 'dirty' : '') });
+          inp.addEventListener('input', onCellInput);
+          inp.addEventListener('keydown', onCellKey);
+          inp.addEventListener('paste', onCellPaste);
+          tr.appendChild(h('td', { class: 'cell' }, inp));
+        });
+        tbody.appendChild(tr);
+      }
+      i = j + 1;
+    }
+    var max = cs.reduce(function (s, c) { return s + c.max; }, 0);
+    var tfoot = h('tfoot', null,
+      h('tr', null, h('td', { class: 'lbl', colspan: 2 }, 'المجموع'), h('td', { text: max }), emps.map(function (e) { return h('td', { 'data-tot': e.id }); })),
+      h('tr', null, h('td', { class: 'lbl', colspan: 3 }, 'النسبة / التقدير'), emps.map(function (e) { return h('td', { 'data-pct': e.id }); })));
+    var t = h('table', { class: 'matrix', id: 'matrix' }, h('thead', null, head), tbody, tfoot);
+    var card = h('div', { class: 'card' },
+      h('div', { class: 'row no-print', style: 'margin-bottom:8px' },
+        h('span', { class: 'muted small', text: 'يمكنك لصق جدول من Excel (صفوف = بنود، أعمدة = موظفون بنفس الترتيب) داخل أي خانة. الدرجات من 0 بخطوة 0.5.' }),
+        h('span', { class: 'grow' }),
+        h('button', { class: 'btn sec sm', onclick: function () { window.print(); } }, 'طباعة'),
+        h('button', { class: 'btn sec sm', id: 'btnCsv', onclick: exportCsv }, 'تصدير CSV')),
+      h('div', { class: 'scroll', style: 'max-height:70vh' }, t));
+    setTimeout(refreshFooters, 0);
+    return card;
+  }
+  function refreshFooters() {
+    var p = S.period;
+    S.data.employees.forEach(function (e) {
+      var t = totals(p, e.id);
+      var a = document.querySelector('[data-tot="' + e.id + '"]'), b = document.querySelector('[data-pct="' + e.id + '"]');
+      if (a) { a.textContent = fmt(t.total) + (t.complete ? '' : '  (' + t.n + '/' + t.of + ')'); }
+      if (b) { b.innerHTML = ''; b.appendChild(h('div', null, t.n ? fmt(Math.round(t.pct * 10) / 10) + '%' : '—')); b.appendChild(bandChip(t.band)); }
+    });
+    updateSaveBar();
+  }
+  function onCellInput(ev) {
+    var inp = ev.target, e = inp.dataset.e, cid = inp.dataset.c;
+    var c = S.data.criteria.filter(function (x) { return x.id === cid; })[0];
+    var raw = normNum(inp.value), k = key(S.period, e, cid);
+    if (raw === '') { setScore(S.period, e, cid, null); delete S.invalid[k]; inp.classList.remove('bad'); }
+    else {
+      var n = Number(raw);
+      if (!isFinite(n) || n < 0 || n > c.max || Math.abs(n * 2 - Math.round(n * 2)) > 1e-9) { S.invalid[k] = true; inp.classList.add('bad'); inp.title = 'من 0 إلى ' + c.max + ' بخطوة 0.5'; refreshFooters(); return; }
+      delete S.invalid[k]; inp.classList.remove('bad'); inp.title = ''; setScore(S.period, e, cid, n);
+    }
+    inp.classList.toggle('dirty', k in S.dirty);
+    refreshFooters();
+  }
+  function cellGrid() {
+    var rows = [].slice.call(document.querySelectorAll('#matrix tbody tr'));
+    return rows.map(function (tr) { return [].slice.call(tr.querySelectorAll('input')); });
+  }
+  function onCellKey(ev) {
+    var g = cellGrid(), r = -1, c = -1;
+    g.forEach(function (row, i) { var j = row.indexOf(ev.target); if (j !== -1) { r = i; c = j; } });
+    var d = ev.key === 'Enter' || ev.key === 'ArrowDown' ? [1, 0] : ev.key === 'ArrowUp' ? [-1, 0] : null;
+    if (!d) return;
+    ev.preventDefault();
+    var nr = r + d[0]; if (g[nr] && g[nr][c]) { g[nr][c].focus(); g[nr][c].select(); }
+  }
+  function onCellPaste(ev) {
+    var txt = (ev.clipboardData || window.clipboardData).getData('text');
+    if (!/[\t\n]/.test(txt.trim())) return;                       // single value → normal paste
+    ev.preventDefault();
+    var g = cellGrid(), r0 = -1, c0 = -1;
+    g.forEach(function (row, i) { var j = row.indexOf(ev.target); if (j !== -1) { r0 = i; c0 = j; } });
+    var lines = txt.replace(/\r/g, '').replace(/\n+$/, '').split('\n'), filled = 0, skipped = 0;
+    lines.forEach(function (ln, ri) {
+      ln.split('\t').forEach(function (cell, ci) {
+        var inp = g[r0 + ri] && g[r0 + ri][c0 + ci]; if (!inp) return;
+        if (inp.disabled) { skipped++; return; }
+        inp.value = normNum(cell); onCellInput({ target: inp }); filled++;
+      });
+    });
+    toast('تم لصق ' + filled + ' خانة' + (skipped ? ' (تخطي ' + skipped + ' خانة غير قابلة للتعديل)' : ''));
+  }
+  function exportCsv() {
+    var p = S.period, cs = crits(), emps = S.data.employees;
+    var rows = [['year', 'period', 'criterion_id', 'criterion_en', 'max'].concat(emps.map(function (e) { return e.name; }))];
+    cs.forEach(function (c) { rows.push([S.year, p, c.id, c.en, c.max].concat(emps.map(function (e) { var v = getScore(p, e.id, c.id); return v === null ? '' : v; }))); });
+    rows.push(['', '', '', 'TOTAL', ''].concat(emps.map(function (e) { return totals(p, e.id).total; })));
+    var csv = '﻿' + rows.map(function (r) { return r.map(function (x) { x = String(x); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(','); }).join('\n');
+    var a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: 'appraisal_' + S.year + '_' + p + '.csv' });
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  /* ---------- employee view ---------- */
+  function employeePane() {
+    var p = S.period, emps = S.data.employees, cs = crits();
+    var e = emps.filter(function (x) { return x.id === S.emp; })[0] || emps[0];
+    if (!e) return h('div', { class: 'alert info', text: 'لا يوجد موظفون.' });
+    var nav = h('div', { class: 'empnav' }, emps.map(function (x) {
+      var t = totals(p, x.id);
+      return h('button', { class: x.id === e.id ? 'on' : '', 'data-emp': x.id, onclick: function () { S.emp = x.id; render(); } },
+        x.name, h('div', { class: 'small muted' }, t.n ? fmt(t.total) + ' / ' + t.max + (t.complete ? '' : ' (ناقص)') : 'لم يُقيَّم'));
+    }));
+    var t = totals(p, e.id);
+    var kpi = h('div', { class: 'kpi' },
+      h('div', { class: 'k' }, h('span', { class: 'small muted' }, 'المجموع'), h('b', { id: 'eTot', text: fmt(t.total) + ' / ' + t.max })),
+      h('div', { class: 'k' }, h('span', { class: 'small muted' }, 'النسبة'), h('b', { id: 'ePct', text: t.n ? fmt(Math.round(t.pct * 10) / 10) + '%' : '—' })),
+      h('div', { class: 'k' }, h('span', { class: 'small muted' }, 'التقدير'), h('b', { id: 'eBand' }, bandChip(t.band))),
+      h('div', { class: 'k' }, h('span', { class: 'small muted' }, 'المكتمل'), h('b', { id: 'eN', text: t.n + ' / ' + t.of })));
+    var list = h('div', null);
+    cs.forEach(function (c) {
+      var v = getScore(p, e.id, c.id), k = key(p, e.id, c.id), ed = canEdit(p, c);
+      var btns = [];
+      for (var n = 1; n <= c.max; n++) (function (n) {
+        btns.push(h('button', { class: (v === n ? 'on' : '') + (k in S.dirty && v === n ? ' dirty' : ''), disabled: !ed, 'data-v': n, 'aria-pressed': v === n ? 'true' : 'false',
+          onclick: function () { setScore(p, e.id, c.id, v === n ? null : n); render(); } }, String(n)));
+      })(n);
+      list.appendChild(h('div', { class: 'crit' + (c.by === 'cio' ? ' cio' : ''), 'data-crit': c.id },
+        h('div', { class: 'row' }, h('b', { text: c.ar || c.en }), h('span', { class: 'muted small', text: '· ' + (c.compAr || c.compEn) }), h('span', { class: 'grow' }),
+          h('span', { class: 'muted small', text: 'من ' + c.max }), c.by === 'cio' ? h('span', { class: 'badge warn', text: 'تقييم الـ CIO' }) : null),
+        h('div', { class: 'en', text: c.en }),
+        h('div', { class: 'rate' }, btns,
+          v !== null && v !== Math.round(v) ? h('span', { class: 'badge warn', text: 'القيمة الحالية ' + v }) : null,
+          ed && v !== null ? h('button', { class: 'btn sec sm', onclick: function () { setScore(p, e.id, c.id, null); render(); } }, 'مسح') : null)));
+    });
+    var ck = p + '|' + e.id, saved = S.data.comments[ck] ? S.data.comments[ck].text : '';
+    var ctext = ck in S.cdirty ? S.cdirty[ck] : saved;
+    var ta = h('textarea', { rows: 3, id: 'comment', maxlength: 2000, disabled: !canEditComment(p), placeholder: 'ملاحظات التقييم / نقاط القوة / فرص التطوير' }, ctext);
+    ta.addEventListener('input', function () { var v = ta.value.trim(); if (v === saved.trim()) delete S.cdirty[ck]; else S.cdirty[ck] = ta.value; updateSaveBar(); });
+    return h('div', { class: 'split' }, h('div', { class: 'card' }, h('h3', null, 'الموظفون'), nav),
+      h('div', null, h('div', { class: 'card' }, h('h2', null, e.name + (e.fullName ? ' — ' + e.fullName : '') + ' · ' + PNAME[p] + ' ' + S.year), kpi, list),
+        h('div', { class: 'card' }, h('h3', null, 'ملاحظات'), ta)));
+  }
+
+  /* ---------- annual ---------- */
+  function annualPane() {
+    var d = S.data, emps = d.employees, cs = crits(), A = d.computed.annual;
+    var head = h('tr', null, ['الموظف'].concat(PERIODS.map(function (p) { return PNAME[p]; }), ['السنوي', 'النسبة', 'التقدير', 'الأرباع']).map(function (x) { return h('th', { text: x }); }));
+    var body = emps.map(function (e) {
+      var a = A[e.id];
+      return h('tr', { 'data-emp': e.id }, h('td', null, h('b', { text: e.name })),
+        PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { class: 'ltr', text: r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—' }); }),
+        h('td', { class: 'ltr', text: a.n ? fmt(a.total) + (a.complete ? '' : ' *') : '—' }),
+        h('td', { class: 'ltr', text: a.n ? fmt(a.pct) + '%' : '—' }), h('td', null, bandChip(a.band)),
+        h('td', { text: a.quarters + '/4' + (a.fullYear ? '' : ' — جزئي') }));
+    });
+    var head2 = h('tr', null, h('th', { text: 'البند' }), h('th', { text: 'الدرجة' }), emps.map(function (e) { return h('th', { text: e.name }); }));
+    var body2 = cs.map(function (c) {
+      return h('tr', null, h('td', null, c.ar || c.en, h('div', { class: 'en', text: c.en })), h('td', { text: c.max }),
+        emps.map(function (e) { var v = A[e.id].items[c.id]; return h('td', { class: 'ltr', text: v === undefined ? '—' : fmt(v) }); }));
+    });
+    return h('div', null,
+      h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, 'الملخص السنوي ' + S.year), h('span', { class: 'grow' }),
+        h('button', { class: 'btn sec sm no-print', onclick: function () { window.print(); } }, 'طباعة')),
+        h('p', { class: 'muted small', text: 'الدرجة السنوية لكل بند = متوسط الأرباع المقيّمة، والمجموع = مجموع البنود (كما في ورقة السنة بملف Excel). النجمة * = تقييم غير مكتمل.' }),
+        h('div', { class: 'scroll' }, h('table', { class: 't', id: 'annualTbl' }, h('thead', null, head), h('tbody', null, body)))),
+      h('div', { class: 'card' }, h('h3', null, 'متوسط البنود خلال السنة'), h('div', { class: 'scroll' }, h('table', { class: 't' }, h('thead', null, head2), h('tbody', null, body2)))));
+  }
+
+  /* ---------- follow-up ---------- */
+  function followPane() {
+    var d = S.data, emps = d.employees;
+    var head = h('tr', null, h('th', { text: 'الموظف' }), PERIODS.concat(['ANNUAL']).map(function (p) { return h('th', { text: PNAME[p] }); }));
+    var body = emps.map(function (e) {
+      return h('tr', null, h('td', null, h('b', { text: e.name })), PERIODS.concat(['ANNUAL']).map(function (p) {
+        var r = p === 'ANNUAL' ? d.computed.annual[e.id] : d.computed.periods[p][e.id], txt, cls = '';
+        if (!r.n) txt = h('span', { class: 'muted', text: '—' });
+        else txt = h('span', null, fmt(r.total), ' ', r.complete ? bandChip(r.band) : h('span', { class: 'badge warn', text: 'ناقص ' + r.n + '/' + r.of }));
+        return h('td', null, h('button', { class: 'cellbtn', 'data-go': p + '|' + e.id, onclick: function () { S.tab = 'eval'; S.period = p; S.emp = e.id; if (p !== 'ANNUAL') S.view = 'emp'; render(); } }, txt));
+      }));
+    });
+    var done = 0, total = emps.length * 4;
+    emps.forEach(function (e) { PERIODS.forEach(function (p) { if (d.computed.periods[p][e.id].complete) done++; }); });
+    var today = new Date().toISOString().slice(0, 10);
+    var fu = d.followups.filter(function (f) { return !S.onlyOpen || f.status !== 'done'; }).sort(function (a, b) { return (a.due || '9') < (b.due || '9') ? -1 : 1; });
+    var nameOf = function (id) { var x = emps.filter(function (e) { return e.id === id; })[0]; return x ? x.name : id; };
+    var frows = fu.map(function (f) {
+      var over = f.status !== 'done' && f.due && f.due < today;
+      return h('tr', { 'data-fu': f.id }, h('td', { text: nameOf(f.empId) }), h('td', { text: PNAME[f.period] }), h('td', { text: f.action }),
+        h('td', { class: over ? 'overdue' : '', text: f.due ? f.due + (over ? ' — متأخر' : '') : '—' }),
+        h('td', null, canFollow() ? h('label', null, h('input', { type: 'checkbox', checked: f.status === 'done', 'aria-label': 'تم',
+          onchange: function () { saveFu({ id: f.id, year: f.year, period: f.period, empId: f.empId, action: f.action, due: f.due, status: this.checked ? 'done' : 'open' }); } }), ' تم') : h('span', { text: f.status === 'done' ? 'تم' : 'مفتوح' })),
+        h('td', null, canFollow() ? h('button', { class: 'btn danger sm', onclick: function () { if (confirm('حذف الإجراء؟')) call('apiDeleteFollowUp', f.id, S.year).then(function (x) { S.data.followups = x; render(); }).catch(fail); } }, 'حذف') : null));
+    });
+    var form = null;
+    if (canFollow()) {
+      var fe = h('select', { id: 'fuEmp' }, emps.map(function (e) { return h('option', { value: e.id, text: e.name }); }));
+      var fp = h('select', { id: 'fuPer' }, PERIODS.map(function (p) { return h('option', { value: p, selected: p === (S.period === 'ANNUAL' ? 'Q4' : S.period), text: PNAME[p] }); }));
+      var fa = h('input', { type: 'text', id: 'fuAct', maxlength: 500, placeholder: 'مثال: خطة تطوير مهارات التواصل — دورة خلال الربع القادم', style: 'width:100%' });
+      var fd = h('input', { type: 'date', id: 'fuDue' });
+      form = h('div', { class: 'row no-print', style: 'margin-bottom:10px' }, h('label', { class: 'f' }, 'الموظف', fe), h('label', { class: 'f' }, 'الفترة', fp),
+        h('label', { class: 'f grow', style: 'min-width:220px' }, 'الإجراء / التوصية', fa), h('label', { class: 'f' }, 'الموعد', fd),
+        h('button', { class: 'btn', id: 'fuAdd', onclick: function () {
+          saveFu({ year: S.year, period: fp.value, empId: fe.value, action: fa.value, due: fd.value, status: 'open' }); } }, 'إضافة'));
+    }
+    return h('div', null,
+      h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, 'لوحة اكتمال التقييمات ' + S.year), h('span', { class: 'grow' }),
+        h('span', { class: 'badge ' + (done === total ? 'final' : 'draft'), text: 'مكتمل ' + done + ' من ' + total })),
+        h('p', { class: 'muted small', text: 'اضغط أي خانة للانتقال إلى تقييمها.' }), h('div', { class: 'scroll' }, h('table', { class: 't', id: 'board' }, h('thead', null, head), h('tbody', null, body)))),
+      h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, 'إجراءات المتابعة والتطوير'), h('span', { class: 'grow' }),
+        h('label', { class: 'small' }, h('input', { type: 'checkbox', checked: S.onlyOpen, onchange: function () { S.onlyOpen = this.checked; render(); } }), ' المفتوحة فقط')),
+        form, fu.length ? h('div', { class: 'scroll' }, h('table', { class: 't', id: 'fuTbl' }, h('thead', null, h('tr', null, ['الموظف', 'الفترة', 'الإجراء', 'الموعد', 'الحالة', ''].map(function (x) { return h('th', { text: x }); }))), h('tbody', null, frows)))
+          : h('div', { class: 'muted', text: 'لا توجد إجراءات.' })));
+  }
+  function saveFu(item) { call('apiSaveFollowUp', item).then(function (x) { S.data.followups = x; render(); toast('تم الحفظ'); }).catch(fail); }
+
+  /* ---------- settings (admin) ---------- */
+  function settingsPane() {
+    var emps = S.boot.employees.slice();
+    var erows = emps.map(function (e) { return empRow(e); });
+    var cs = S.data.criteria;
+    var crows = cs.map(function (c) { return critRow(c); });
+    var bands = bandsSorted().map(function (b) { return { min: b.min, ar: b.ar, en: b.en || '' }; });
+    var bbox = h('div', { id: 'bandsBox' });
+    function drawBands() {
+      bbox.innerHTML = '';
+      bands.forEach(function (b, i) {
+        bbox.appendChild(h('div', { class: 'row', style: 'margin-bottom:6px' },
+          h('label', { class: 'f' }, 'من %', h('input', { type: 'number', min: 0, max: 100, value: b.min, style: 'width:80px', 'data-b': 'min', onchange: function () { b.min = Number(this.value); } })),
+          h('label', { class: 'f' }, 'التقدير', h('input', { type: 'text', value: b.ar, 'data-b': 'ar', onchange: function () { b.ar = this.value; } })),
+          h('label', { class: 'f' }, 'English', h('input', { type: 'text', value: b.en, 'data-b': 'en', class: 'ltr', onchange: function () { b.en = this.value; } })),
+          h('button', { class: 'btn danger sm', onclick: function () { bands.splice(i, 1); drawBands(); } }, 'حذف')));
+      });
+    }
+    drawBands();
+    return h('div', null,
+      h('div', { class: 'card' }, h('h2', null, 'الموظفون'),
+        h('p', { class: 'muted small', text: 'الاسم المختصر يظهر في الجداول (كما في ملف Excel). إلغاء «فعّال» يخفي الموظف من الفترات الجديدة مع الإبقاء على تقييماته السابقة.' }),
+        h('div', { class: 'scroll' }, h('table', { class: 't', id: 'empTbl' }, h('thead', null, h('tr', null, ['الاسم المختصر', 'الاسم الكامل', 'القطاع', 'فعّال', ''].map(function (x) { return h('th', { text: x }); }))),
+          h('tbody', null, erows, empRow({ id: '', name: '', fullName: '', sector: '', active: true }, true))))),
+      h('div', { class: 'card' }, h('h2', null, 'بنود التقييم — سنة ' + S.year),
+        h('p', { class: 'muted small', text: 'التعديل هنا يخص هذه السنة فقط. إلغاء تفعيل بند يستبعده من الحسابات دون حذف درجاته. البند الذي جهته «CIO» يقيّمه مستخدم بصلاحية cio.' }),
+        h('div', { class: 'scroll' }, h('table', { class: 't', id: 'critTbl' }, h('thead', null, h('tr', null, ['#', 'المجال (عربي)', 'Competence', 'البند (عربي)', 'Criterion', 'الدرجة', 'الجهة', 'فعّال', ''].map(function (x) { return h('th', { text: x }); }))),
+          h('tbody', null, crows, critRow({ id: '', order: '', compAr: '', compEn: '', ar: '', en: '', max: 5, by: 'manager', active: true }, true))))),
+      h('div', { class: 'card' }, h('h2', null, 'فئات التقدير'), h('p', { class: 'muted small', text: 'الفئات الافتراضية اقتراح قابل للتعديل (الملف الأصلي لا يتضمن فئات).' }), bbox,
+        h('div', { class: 'row' }, h('button', { class: 'btn sec sm', onclick: function () { bands.push({ min: 0, ar: '', en: '' }); drawBands(); } }, '＋ فئة'),
+          h('button', { class: 'btn', id: 'saveBands', onclick: function () { call('apiSaveBands', bands).then(function (b) { S.boot.bands = b; toast('تم حفظ الفئات'); return loadYear(S.year); }).catch(fail); } }, 'حفظ الفئات'))),
+      h('div', { class: 'card' }, h('h2', null, 'الوصول والصلاحيات'),
+        h('p', { class: 'small', text: 'تُدار من ورقة AllowedUsers في Google Sheet: admin = مدير المنصة · evaluator = مقيّم (بنود المدير) · cio = بند الـ CIO فقط · viewer = اطلاع ولوحة المؤشرات. أي بريد غير مدرج لا يستطيع الدخول.' })));
+  }
+  function empRow(e, isNew) {
+    var f = { id: e.id, name: e.name, fullName: e.fullName, sector: e.sector, active: e.active };
+    var n = h('input', { type: 'text', value: f.name, 'data-f': 'name', placeholder: isNew ? 'موظف جديد' : '', onchange: function () { f.name = this.value; } });
+    var fn = h('input', { type: 'text', value: f.fullName, onchange: function () { f.fullName = this.value; } });
+    var sc = h('input', { type: 'text', value: f.sector, style: 'width:90px', onchange: function () { f.sector = this.value; } });
+    var ac = h('input', { type: 'checkbox', checked: f.active, 'aria-label': 'فعّال', onchange: function () { f.active = this.checked; } });
+    return h('tr', null, h('td', null, n), h('td', null, fn), h('td', null, sc), h('td', null, ac),
+      h('td', null, h('button', { class: 'btn sm' + (isNew ? '' : ' sec'), 'data-save-emp': isNew ? 'new' : e.id, onclick: function () {
+        call('apiSaveEmployee', f).then(function (list) { S.boot.employees = list; toast('تم الحفظ'); return loadYear(S.year); }).catch(fail); } }, isNew ? 'إضافة' : 'حفظ')));
+  }
+  function critRow(c, isNew) {
+    var f = { id: c.id, order: c.order, compAr: c.compAr, compEn: c.compEn, ar: c.ar, en: c.en, max: c.max, by: c.by, active: c.active };
+    function inp(k, w, ltr) { return h('input', { type: 'text', value: f[k], style: 'width:' + w + 'px', class: ltr ? 'ltr' : '', onchange: function () { f[k] = this.value; } }); }
+    var by = h('select', { onchange: function () { f.by = this.value; } }, h('option', { value: 'manager', selected: f.by === 'manager' }, 'المدير'), h('option', { value: 'cio', selected: f.by === 'cio' }, 'CIO'));
+    return h('tr', null, h('td', { text: isNew ? '＋' : c.order }), h('td', null, inp('compAr', 120)), h('td', null, inp('compEn', 120, 1)), h('td', null, inp('ar', 200)), h('td', null, inp('en', 200, 1)),
+      h('td', null, h('input', { type: 'number', min: 1, max: 100, value: f.max, style: 'width:60px', onchange: function () { f.max = Number(this.value); } })), h('td', null, by),
+      h('td', null, h('input', { type: 'checkbox', checked: f.active, 'aria-label': 'فعّال', onchange: function () { f.active = this.checked; } })),
+      h('td', null, h('button', { class: 'btn sm' + (isNew ? '' : ' sec'), 'data-save-crit': isNew ? 'new' : c.id, onclick: function () {
+        call('apiSaveCriterion', S.year, f).then(function (d) { applyData(d); toast('تم الحفظ'); }).catch(fail); } }, isNew ? 'إضافة' : 'حفظ')));
+  }
+
+  /* ---------- save bar / actions ---------- */
+  function saveBar() {
+    var n = Object.keys(S.dirty).length + Object.keys(S.cdirty).length;
+    var bar = h('div', { class: 'savebar no-print' + (n || B.role === 'viewer' ? '' : ' hide'), id: 'saveBar' },
+      h('span', { id: 'saveMsg' }), h('span', { class: 'grow' }),
+      h('button', { class: 'btn sec', id: 'btnDiscard', onclick: function () { if (confirm('تجاهل التعديلات غير المحفوظة؟')) { S.dirty = {}; S.cdirty = {}; S.invalid = {}; render(); } } }, 'تجاهل'),
+      h('button', { class: 'btn', id: 'btnSave', onclick: save }, 'حفظ التعديلات'));
+    if (B.role === 'viewer' || S.tab !== 'eval' || S.period === 'ANNUAL') bar.classList.add('hide');
+    setTimeout(updateSaveBar, 0);
+    return bar;
+  }
+  function updateSaveBar() {
+    var bar = document.getElementById('saveBar'); if (!bar) return;
+    var n = Object.keys(S.dirty).length + Object.keys(S.cdirty).length, bad = Object.keys(S.invalid).length;
+    var hideAlways = B.role === 'viewer' || S.tab !== 'eval' || S.period === 'ANNUAL';
+    bar.classList.toggle('hide', hideAlways || (!n && !bad));
+    document.getElementById('saveMsg').textContent = bad ? 'توجد درجات غير صالحة (' + bad + ') — صحّحها قبل الحفظ' : 'تعديلات غير محفوظة: ' + n;
+    document.getElementById('btnSave').disabled = !!bad || !n;
+  }
+  function save() {
+    var byPeriod = {};
+    Object.keys(S.dirty).forEach(function (k) { var a = k.split('|'); (byPeriod[a[0]] = byPeriod[a[0]] || { ch: [], cm: {} }).ch.push({ emp: a[1], crit: a[2], score: S.dirty[k] }); });
+    Object.keys(S.cdirty).forEach(function (k) { var a = k.split('|'); (byPeriod[a[0]] = byPeriod[a[0]] || { ch: [], cm: {} }).cm[a[1]] = S.cdirty[k]; });
+    var ps = Object.keys(byPeriod), last = null, btn = document.getElementById('btnSave');
+    btn.disabled = true; btn.textContent = 'جارٍ الحفظ…';
+    ps.reduce(function (chain, p) {
+      return chain.then(function () { return call('apiSaveScores', S.year, p, byPeriod[p].ch, byPeriod[p].cm).then(function (d) { last = d; delete_p(p); }); });
+    }, Promise.resolve()).then(function () {
+      S.data = last; S.invalid = {}; toast('تم الحفظ'); render();
+    }).catch(function (e) { fail(e); btn.disabled = false; btn.textContent = 'حفظ التعديلات'; if (last) { S.data = last; } });
+  }
+  function delete_p(p) {
+    Object.keys(S.dirty).forEach(function (k) { if (k.indexOf(p + '|') === 0) delete S.dirty[k]; });
+    Object.keys(S.cdirty).forEach(function (k) { if (k.indexOf(p + '|') === 0) delete S.cdirty[k]; });
+  }
+  function setStatus(st, note) {
+    if (isDirty()) { toast('احفظ التعديلات أولاً', true); return; }
+    call('apiSetStatus', S.year, S.period, st, note || '').then(function (d) { applyData(d); toast(st === 'final' ? 'تم اعتماد الفترة' : 'أُعيد فتح الفترة'); }).catch(fail);
+  }
+  function modal(title, body, onOk, okText) {
+    var bg = h('div', { class: 'modal-bg', role: 'dialog', 'aria-modal': 'true' });
+    var m = h('div', { class: 'modal' }, h('h2', { style: 'margin-top:0' }, title), body,
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('span', { class: 'grow' }),
+        h('button', { class: 'btn sec', onclick: function () { bg.remove(); } }, 'إلغاء'),
+        h('button', { class: 'btn', id: 'modalOk', onclick: function () { if (onOk() !== false) bg.remove(); } }, okText || 'تأكيد')));
+    bg.appendChild(m); document.body.appendChild(bg);
+    var f = m.querySelector('input,textarea,select'); if (f) f.focus();
+  }
+  function reopenModal() {
+    var ta = h('textarea', { rows: 3, id: 'reopenNote', placeholder: 'سبب إعادة الفتح (يُسجَّل في سجل التغييرات)' });
+    modal('إعادة فتح ' + PNAME[S.period] + ' ' + S.year, ta, function () { if (!ta.value.trim()) { toast('اكتب السبب', true); return false; } setStatus('draft', ta.value); });
+  }
+  function addYearModal() {
+    var maxY = Math.max.apply(null, S.boot.years);
+    var y = h('input', { type: 'number', id: 'newYear', min: 2000, max: 2100, value: maxY + 1 });
+    var src = h('select', { id: 'copyFrom' }, S.boot.years.slice().reverse().map(function (x) { return h('option', { value: x, text: String(x) }); }));
+    var body = h('div', null, h('label', { class: 'f' }, 'السنة (جديدة أو سابقة لتسجيل تقييمات قديمة)', y), h('br'), h('label', { class: 'f' }, 'نسخ بنود التقييم من سنة', src),
+      h('p', { class: 'muted small', text: 'تُنشأ أربع فترات (Q1–Q4) كمسودة فارغة. الموظفون الفعّالون يظهرون تلقائياً.' }));
+    modal('إضافة سنة', body, function () {
+      call('apiAddYear', Number(y.value), Number(src.value)).then(function (r) { S.boot.years = r.years; S.dirty = {}; S.cdirty = {}; S.data = r.data; S.year = r.data.year; S.period = 'Q1'; S.tab = 'eval'; render(); toast('أُضيفت السنة ' + r.data.year); }).catch(fail);
+    }, 'إضافة');
+  }
+
+  window.addEventListener('beforeunload', function (e) { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+  start();
+})();
+</script>
+</body>
+</html>
