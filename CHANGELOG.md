@@ -1,5 +1,9 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.4 — 2026-11-09
+- Seed: 2025 loads employees + criteria + actual scores (final); **2026 loads employees + criteria only, no scores** (`tools/build_seed.py ... --blank=2026`).
+- New menu item «مسح درجات سنة» (`clearYearScores`) to wipe a year's scores/comments in a sheet already seeded with the old data.
+
 ## v1.3 — 2026-11-09
 - **Individual appraisal report (PDF)** per employee: scores per criterion for Q1–Q4 and annual average, totals, %, band, evaluator comments, follow-up plan, signature block, A4 print layout. Buttons: «تقرير PDF للموظف» (employee view), «PDF» per row and «تقارير الجميع PDF» (annual summary; one page per employee).
 - Draft (non-final) periods are flagged on the report; unsaved edits must be saved first.

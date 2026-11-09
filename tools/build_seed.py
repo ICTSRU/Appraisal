@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Builds apps-script/Seed.gs (+ Logos.html) from the original Appraisal_form xlsx files.
-Usage: python3 tools/build_seed.py Appraisal_form_2025.xlsx Appraisal_form_2026.xlsx
+Usage: python3 tools/build_seed.py Appraisal_form_2025.xlsx Appraisal_form_2026.xlsx --blank=2026   (--blank=YYYY: load that year's employees/criteria without scores)
 Years are read from the sheet names ("Q1 2025" ...). Re-run to regenerate; Seed.gs is only used by setup()."""
 import sys, json, re, base64, os, openpyxl
 AR = {  # Arabic labels (draft translation — editable in the Criteria tab)
@@ -24,7 +24,8 @@ AR = {  # Arabic labels (draft translation — editable in the Criteria tab)
  'Manages workload in an organized manner':'يدير عبء العمل بصورة منظمة','Contributes new ideas and methods.':'يسهم بأفكار وأساليب جديدة',
  'Responds effectively to changing needs of the department':'يستجيب بفاعلية للاحتياجات المتغيرة للإدارة','General evaluation':'التقييم العام'}
 def clean(s): return re.sub(r'\s+',' ',str(s)).strip()
-files=sys.argv[1:]; seed={'employees':[],'criteria':[],'years':{}}
+BLANK=[int(a.split('=')[1]) for a in sys.argv[1:] if a.startswith('--blank=')]  # years imported WITHOUT scores (employees+criteria only)
+files=[a for a in sys.argv[1:] if not a.startswith('--')]; seed={'employees':[],'criteria':[],'years':{}}
 for f in files:
     wb=openpyxl.load_workbook(f)
     year=int(re.search(r'(\d{4})',wb.worksheets[0].title).group(1))
@@ -44,7 +45,7 @@ for f in files:
         for i,c in enumerate(range(6,17),1):
             vals=[s.cell(r,c).value for r in range(2,21)]
             if any(v is not None for v in vals): per['E%02d'%i]=vals
-        ys['Q%d'%q]=per
+        ys['Q%d'%q]={} if year in BLANK else per
     seed['years'][year]=ys
 missing=[c['en'] for c in seed['criteria'] if not c['ar']]; assert not missing, missing
 with open('apps-script/Seed.gs','w',encoding='utf-8') as o:

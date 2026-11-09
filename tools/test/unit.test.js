@@ -18,7 +18,8 @@ excel['2025'].forEach((exp, i) => { const a = d25.computed.annual['E' + String(i
 console.log('annual 2025 differences vs Excel:', JSON.stringify(diffs));
 ok(diffs.length === 1 && diffs[0][1] === 6, 'only Ammar (E06) differs in 2025 (Excel patched the blank item with another employee\'s score)');
 // 2026: Inshrah has only Q1 → partial (Excel shows 17.5 because blanks count as 0)
-const a26 = d26.computed.annual.E11; ok(a26.quarters === 1 && !a26.fullYear && a26.total === 70, '2026 Inshrah is partial, not 17.5');
+ok(d26.employees.length === 11 && d26.criteria.filter(c => c.active).length === 19 && Object.keys(d26.scores).length === 0, '2026 seeded with employees+criteria and NO scores');
+ok(d26.computed.annual.E11.quarters === 0 && d26.computed.annual.E11.n === 0, '2026 blank → nothing computed');
 // statuses
 ok(d25.periods.Q1.status === 'final' && d26.periods.Q1.status === 'draft', 'statuses');
 // results sheet
@@ -72,4 +73,7 @@ ok(A.apiDeleteFollowUp(fu[0].id, 2026).length === 0, 'follow-up delete');
 ok(A.readTable_('ChangeLog').length > 10, 'change log written');
 // idempotent re-setup keeps data
 const n = A.readTable_('Scores').length; A.setup(); ok(A.readTable_('Scores').length === n, 'setup is idempotent');
+// clearYearScores (menu) wipes one year only
+{ const G2 = create(), A2 = G2.api; A2.setup(); const ui = G2.ctx.SpreadsheetApp; ui.getUi = () => ({ ButtonSet: { OK_CANCEL: 1, YES_NO: 2 }, Button: { OK: 'OK', YES: 'YES' }, prompt: () => ({ getSelectedButton: () => 'OK', getResponseText: () => '2025' }), alert: () => 'YES' });
+  const n0 = A2.readTable_('Scores').length; A2.clearYearScores(); ok(n0 > 0 && A2.readTable_('Scores').length === 0 && A2.apiYear(2025).criteria.length === 19 && A2.apiYear(2025).employees.length === 11, 'clearYearScores keeps employees/criteria'); }
 console.log('unit tests passed:', pass);

@@ -362,6 +362,26 @@ function rebuildResults_(year) {
 }
 function rebuildAllResults() { yearsList_().forEach(rebuildResults_); }
 
+/** Menu ▸ clears ALL scores and comments of one year (keeps employees, criteria, status). Asks for the year and a confirmation. */
+function clearYearScores() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('مسح درجات سنة', 'اكتب السنة المراد مسح درجاتها وملاحظاتها (مثال 2026). الموظفون والبنود تبقى كما هي.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const y = Number(String(r.getResponseText()).trim());
+  if (!y || yearsList_().indexOf(y) === -1) { ui.alert('السنة غير موجودة: ' + r.getResponseText()); return; }
+  const n = readTable_('Scores').filter(function (s) { return Number(s.year) === y; }).length;
+  if (ui.alert('تأكيد', 'سيتم حذف ' + n + ' درجة وملاحظات السنة ' + y + ' نهائياً. متابعة؟', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  withLock_(function () {
+    writeTable_('Scores', readTable_('Scores').filter(function (s) { return Number(s.year) !== y; }));
+    writeTable_('Comments', readTable_('Comments').filter(function (s) { return Number(s.year) !== y; }));
+    const at = now_();
+    writeTable_('Periods', readTable_('Periods').map(function (p) { if (Number(p.year) === y) { p.status = 'draft'; p.note = 'تم مسح الدرجات — جاهزة للإدخال'; p.updatedBy = 'menu'; p.updatedAt = at; } return p; }));
+    appendRows_('ChangeLog', [{ at: at, by: 'menu', action: 'clear scores ' + y + ' (' + n + ')' }]);
+  });
+  rebuildResults_(y);
+  ui.alert('تم مسح درجات ' + y);
+}
+
 /* ------------------------------- Setup ------------------------------- */
 /** Menu ▸ 1) — creates every tab and (once) loads the 2025/2026 data from the original workbooks. Safe to re-run. */
 function setup() {
@@ -373,7 +393,8 @@ function setup() {
     Object.keys(SEED.years).forEach(function (y) {
       const status = Number(y) < new Date().getFullYear() ? 'final' : 'draft';
       appendRows_('Criteria', SEED.criteria.map(function (c) { return { year: Number(y), id: c.id, order: c.order, compEn: c.compEn, compAr: c.compAr, en: c.en, ar: c.ar, max: c.max, by: c.by, active: true }; }));
-      const note = status === 'draft' ? 'مستورد من ملف Appraisal_form ' + y + ' — يحتاج مراجعة قبل الاعتماد' : 'مستورد من ملف Appraisal_form ' + y;
+      const hasScores = PERIODS.some(function (p) { return Object.keys(SEED.years[y][p] || {}).length; });
+      const note = !hasScores ? 'سنة جديدة — الموظفون والبنود جاهزة بدون درجات' : status === 'draft' ? 'مستورد من ملف Appraisal_form ' + y + ' — يحتاج مراجعة قبل الاعتماد' : 'مستورد من ملف Appraisal_form ' + y;
       appendRows_('Periods', PERIODS.map(function (p) { return { year: Number(y), period: p, status: status, note: note, updatedBy: 'import', updatedAt: at }; }));
       const sc = [];
       PERIODS.forEach(function (p) {

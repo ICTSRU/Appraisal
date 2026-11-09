@@ -91,8 +91,8 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   ok(await v.locator('#matrix input:not([disabled])').count() === 0, 'viewer read-only'); ok(!(await v.locator('#saveBar').isVisible()), 'no save bar for viewer');
   /* ---------------- dashboard ---------------- */
   let d = await open('m.elmahdy@sr.edu.sa', '/?page=dashboard'); await d.waitForSelector('#tAvg'); await d.screenshot({ path: SHOT + '/07_dashboard.png', fullPage: true });
-  console.log('TAVG:', await d.locator('#tAvg').textContent()); ok((await d.locator('#tAvg').textContent()).includes('/ 100'), 'avg tile'); ok(await d.locator('#draftWarn').count() === 1, 'draft warning on 2026');
-  await d.selectOption('#fYear', '2025'); await d.waitForSelector('#trendCard svg');
+  console.log('TAVG:', await d.locator('#tAvg').textContent()); ok(await d.locator('#draftWarn').count() === 1, 'draft warning on 2026');
+  await d.selectOption('#fYear', '2025'); await d.waitForSelector('#trendCard svg'); ok((await d.locator('#tAvg').textContent()).includes('/ 100'), 'avg tile (2025)');
   ok(await d.locator('#draftWarn').count() === 0, 'no draft warning on final 2025');
   const top = (await d.locator('#tTop').textContent()); ok(/90\.3|90\.2/.test(top) && /Nawaz/.test(top), 'top performer 2025 = Nawaz 90.25 → ' + top);
   ok(await d.locator('#rankCard [data-rank]').count() === 11, '11 ranked');
