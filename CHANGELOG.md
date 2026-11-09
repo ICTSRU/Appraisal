@@ -1,5 +1,10 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.3 — 2026-11-09
+- **Individual appraisal report (PDF)** per employee: scores per criterion for Q1–Q4 and annual average, totals, %, band, evaluator comments, follow-up plan, signature block, A4 print layout. Buttons: «تقرير PDF للموظف» (employee view), «PDF» per row and «تقارير الجميع PDF» (annual summary; one page per employee).
+- Draft (non-final) periods are flagged on the report; unsaved edits must be saved first.
+- No server/schema change (first release to ship through the auto-deploy Action).
+
 ## v1.2 — 2026-11-09
 - Added GitHub → Apps Script auto-deploy (`.github/workflows/deploy-apps-script.yml`, clasp) and `AUTODEPLOY.md`; `.gitignore`. No application changes.
 

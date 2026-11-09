@@ -57,6 +57,15 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   ok(G.api.readTable_('Comments').some(r => r.text === 'أداء ممتاز'), 'comment saved'); await p.screenshot({ path: SHOT + '/03_employee_view.png' });
   // annual
   await p.selectOption('#yearSel', '2025'); await p.click('[data-period=ANNUAL]'); await p.waitForSelector('#annualTbl');
+  // individual report (PDF via print)
+  await p.click('[data-rpt-btn=E01]'); await p.waitForSelector('#rpt [data-rpt=E01]');
+  ok((await p.locator('#rpt .rpt-kpi').textContent()).includes('88'), 'report shows annual 88');
+  ok(await p.locator('#rpt tbody tr:not(.grp)').count() === 19, 'report lists 19 criteria');
+  await p.screenshot({ path: SHOT + '/05_report.png' });
+  const pdf = await p.pdf({ format: 'A4', printBackground: true }); fs.writeFileSync(SHOT + '/report_E01.pdf', pdf); ok(pdf.length > 5000, 'pdf generated');
+  await p.click('#rptClose'); ok(await p.locator('#rpt').count() === 0, 'report closed');
+  await p.click('#rptAll'); await p.waitForSelector('#rpt'); ok(await p.locator('#rpt .rpt-page').count() === 11, 'all-employees report: 11 pages');
+  await p.click('#rptClose');
   const row = (await p.locator('#annualTbl tr[data-emp=E01]').textContent()); ok(/88/.test(row), 'annual 88 for M.Mahdy'); await p.screenshot({ path: SHOT + '/04_annual.png' });
   // follow-up
   await p.click('[data-tab=follow]'); await p.waitForSelector('#board'); await p.fill('#fuAct', 'خطة تطوير'); await p.fill('#fuDue', '2026-01-01'); await p.click('#fuAdd'); await p.waitForSelector('#fuTbl');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.2">
+<meta name="version" content="1.3">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <style>
@@ -40,6 +40,19 @@
 .cellbtn{border:1px solid var(--border);background:#fff;border-radius:var(--radius);padding:3px 10px;cursor:pointer;font:inherit;min-width:92px}
 .cellbtn:hover{background:var(--purple-light)}
 td.overdue{background:#fdecea}
+.rpt{position:fixed;inset:0;background:#fff;z-index:9999;overflow:auto;padding:0 0 30px}
+.rpt-bar{position:sticky;top:0;background:var(--purple-light);display:flex;gap:10px;align-items:center;padding:10px 16px;z-index:2;flex-wrap:wrap}
+.rpt-page{max-width:794px;margin:16px auto;padding:22px 26px;border:1px solid var(--border);background:#fff;font-size:.88rem}
+.rpt-head{display:flex;align-items:center;gap:14px;border-bottom:3px solid var(--purple);padding-bottom:10px;margin-bottom:10px}
+.rpt-head img{height:40px;width:auto}.rpt-head .rt{font-weight:800;font-size:1.25rem;color:var(--purple-dark)}.rpt-head .rs{direction:ltr;text-align:start;color:var(--muted);font-size:.8rem}
+.rpt-info{width:100%;border-collapse:collapse;margin-bottom:8px}.rpt-info th{background:var(--purple-light);text-align:start;width:14%;padding:4px 8px;border:1px solid var(--border)}.rpt-info td{padding:4px 8px;border:1px solid var(--border)}
+.rpt-t{width:100%;border-collapse:collapse;margin:6px 0;font-size:.82rem}.rpt-t th,.rpt-t td{border:1px solid var(--border);padding:3px 6px;text-align:center}.rpt-t td:first-child,.rpt-t th:first-child{text-align:start}
+.rpt-t thead th{background:var(--purple);color:#fff}.rpt-t tr.grp td{background:#f3eefa;font-weight:700;color:var(--purple-dark);text-align:start}.rpt-t tfoot td{background:var(--purple-light);font-weight:700}
+.rpt-t tr{break-inside:avoid}.rpt-warn{background:#fff8e6;border:1px solid var(--warn);padding:5px 10px;border-radius:6px;margin:6px 0}
+.rpt-box{border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:8px 0;break-inside:avoid}.rpt-box .rc{margin-top:4px}
+.rpt-sign{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:34px;text-align:center;break-inside:avoid}.rpt-sign .ln{border-bottom:1px solid #333;height:34px;margin-bottom:4px}
+.rpt-foot{margin-top:14px;font-size:.72rem;color:var(--muted);border-top:1px solid var(--border);padding-top:6px}
+@media print{@page{size:A4;margin:12mm}.rpt-page{font-size:.78rem}.rpt-t{font-size:.74rem}.rpt-t th,.rpt-t td{padding:1px 4px}.rpt-t .en{font-size:.62rem;line-height:1.15}.rpt-sign{margin-top:18px}.rpt-sign .ln{height:24px}.rpt-head{padding-bottom:6px;margin-bottom:6px}body.rpt-on>*:not(#rpt){display:none!important}.rpt{position:static;overflow:visible;padding:0}.rpt-page{border:0;margin:0;padding:0;max-width:none}.rpt-t thead th,.rpt-info th,.rpt-t tr.grp td,.rpt-t tfoot td,.rpt-head,.kpi .k{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 <?!= include('Brand') ?>
 <title>التقييم والمتابعة | SRU Performance Appraisal</title>
@@ -355,7 +368,7 @@ td.overdue{background:#fdecea}
     var ta = h('textarea', { rows: 3, id: 'comment', maxlength: 2000, disabled: !canEditComment(p), placeholder: 'ملاحظات التقييم / نقاط القوة / فرص التطوير' }, ctext);
     ta.addEventListener('input', function () { var v = ta.value.trim(); if (v === saved.trim()) delete S.cdirty[ck]; else S.cdirty[ck] = ta.value; updateSaveBar(); });
     return h('div', { class: 'split' }, h('div', { class: 'card' }, h('h3', null, 'الموظفون'), nav),
-      h('div', null, h('div', { class: 'card' }, h('h2', null, e.name + (e.fullName ? ' — ' + e.fullName : '') + ' · ' + PNAME[p] + ' ' + S.year), kpi, list),
+      h('div', null, h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, e.name + (e.fullName ? ' — ' + e.fullName : '') + ' · ' + PNAME[p] + ' ' + S.year), h('span', { class: 'grow' }), h('button', { class: 'btn sec sm no-print', id: 'rptOne', onclick: function () { openReport([e.id]); } }, 'تقرير PDF للموظف')), kpi, list),
         h('div', { class: 'card' }, h('h3', null, 'ملاحظات'), ta)));
   }
 
@@ -365,7 +378,7 @@ td.overdue{background:#fdecea}
     var head = h('tr', null, ['الموظف'].concat(PERIODS.map(function (p) { return PNAME[p]; }), ['السنوي', 'النسبة', 'التقدير', 'الأرباع']).map(function (x) { return h('th', { text: x }); }));
     var body = emps.map(function (e) {
       var a = A[e.id];
-      return h('tr', { 'data-emp': e.id }, h('td', null, h('b', { text: e.name })),
+      return h('tr', { 'data-emp': e.id }, h('td', null, h('b', { text: e.name }), ' ', h('button', { class: 'cellbtn no-print', style: 'min-width:0;padding:0 6px', title: 'تقرير PDF', 'data-rpt-btn': e.id, onclick: function () { openReport([e.id]); } }, 'PDF')),
         PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { class: 'ltr', text: r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—' }); }),
         h('td', { class: 'ltr', text: a.n ? fmt(a.total) + (a.complete ? '' : ' *') : '—' }),
         h('td', { class: 'ltr', text: a.n ? fmt(a.pct) + '%' : '—' }), h('td', null, bandChip(a.band)),
@@ -378,10 +391,76 @@ td.overdue{background:#fdecea}
     });
     return h('div', null,
       h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', { style: 'margin:0' }, 'الملخص السنوي ' + S.year), h('span', { class: 'grow' }),
-        h('button', { class: 'btn sec sm no-print', onclick: function () { window.print(); } }, 'طباعة')),
+        h('button', { class: 'btn sec sm no-print', id: 'rptAll', onclick: function () { openReport(emps.map(function (x) { return x.id; })); } }, 'تقارير الجميع PDF'), h('button', { class: 'btn sec sm no-print', onclick: function () { window.print(); } }, 'طباعة')),
         h('p', { class: 'muted small', text: 'الدرجة السنوية لكل بند = متوسط الأرباع المقيّمة، والمجموع = مجموع البنود (كما في ورقة السنة بملف Excel). النجمة * = تقييم غير مكتمل.' }),
         h('div', { class: 'scroll' }, h('table', { class: 't', id: 'annualTbl' }, h('thead', null, head), h('tbody', null, body)))),
       h('div', { class: 'card' }, h('h3', null, 'متوسط البنود خلال السنة'), h('div', { class: 'scroll' }, h('table', { class: 't' }, h('thead', null, head2), h('tbody', null, body2)))));
+  }
+
+  /* ---------- individual report (PDF via print) ---------- */
+  function bandText(idx) { var b = bandsSorted()[idx]; return idx < 0 || !b ? 'غير مكتمل' : b.ar; }
+  function reportBlock(e, last) {
+    var d = S.data, cs = crits(), A = d.computed.annual[e.id], now = new Date();
+    var rows = [], grp = null;
+    cs.forEach(function (c) {
+      var g = c.compAr || c.compEn || '';
+      if (g !== grp) { grp = g; rows.push(h('tr', { class: 'grp' }, h('td', { colspan: 7, text: g + (c.compEn && c.compAr ? ' · ' + c.compEn : '') }))); }
+      var av = A.items[c.id];
+      rows.push(h('tr', null, h('td', null, c.ar || c.en, h('div', { class: 'en', text: c.en })), h('td', { class: 'ltr', text: c.max }),
+        PERIODS.map(function (p) { var v = getScore(p, e.id, c.id); return h('td', { class: 'ltr', text: v === null ? '—' : fmt(v) }); }),
+        h('td', { class: 'ltr', text: av === undefined ? '—' : fmt(av) })));
+    });
+    var max = A.max;
+    var foot = h('tr', { class: 'tot' }, h('td', { text: 'المجموع / Total' }), h('td', { class: 'ltr', text: max }),
+      PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { class: 'ltr', text: r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—' }); }),
+      h('td', { class: 'ltr', text: A.n ? fmt(A.total) + (A.complete ? '' : ' *') : '—' }));
+    var foot2 = h('tr', { class: 'tot' }, h('td', { text: 'النسبة والتقدير' }), h('td'),
+      PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { text: r.n ? fmt(r.pct) + '%' + (r.complete ? ' · ' + bandsSorted()[r.band].ar : '') : '—' }); }),
+      h('td', { text: A.n ? fmt(A.pct) + '%' : '—' }));
+    var stat = PERIODS.map(function (p) { return PNAME[p] + ': ' + (pStatus(p) === 'final' ? 'معتمد' : 'مسودة'); }).join(' · ');
+    var anyDraft = PERIODS.some(function (p) { return pStatus(p) !== 'final' && d.computed.periods[p][e.id].n; });
+    var cm = PERIODS.filter(function (p) { var c = d.comments[p + '|' + e.id]; return c && c.text; }).map(function (p) {
+      return h('div', { class: 'rc' }, h('b', { text: PNAME[p] + ': ' }), d.comments[p + '|' + e.id].text); });
+    var nameOf = e.name;
+    var fu = d.followups.filter(function (f) { return f.empId === e.id; });
+    return h('section', { class: 'rpt-page', 'data-rpt': e.id, style: last ? '' : 'break-after:page' },
+      h('div', { class: 'rpt-head' }, h('img', { src: ITOC_LOGOS.sru, alt: '' }), h('div', { class: 'grow' }, h('div', { class: 'rt', text: 'تقرير تقييم الأداء الفردي' }),
+        h('div', { class: 'rs', text: 'Individual Performance Appraisal Report · ' + S.year })), h('img', { src: ITOC_LOGOS.itoc, alt: '' })),
+      h('table', { class: 'rpt-info' }, h('tr', null, h('th', { text: 'الموظف' }), h('td', { text: e.fullName || e.name }), h('th', { text: 'القطاع' }), h('td', { text: e.sector || '—' })),
+        h('tr', null, h('th', { text: 'السنة' }), h('td', { text: S.year }), h('th', { text: 'الفترات' }), h('td', { text: A.quarters + '/4' + (A.fullYear ? '' : ' — سنة جزئية') }))),
+      h('div', { class: 'kpi rpt-kpi' },
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: 'الدرجة السنوية' }), h('b', { text: A.n ? fmt(A.total) + ' / ' + max : '—' })),
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: 'النسبة' }), h('b', { text: A.n ? fmt(A.pct) + '%' : '—' })),
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: 'التقدير' }), h('b', { style: 'direction:rtl', text: bandText(A.band) }))),
+      anyDraft ? h('div', { class: 'rpt-warn', text: 'تنبيه: يتضمن التقرير فترات غير معتمدة (مسودة) — النتائج مبدئية.' }) : null,
+      h('table', { class: 'rpt-t' }, h('thead', null, h('tr', null, ['البند / Criterion', 'الدرجة', 'Q1', 'Q2', 'Q3', 'Q4', 'المتوسط السنوي'].map(function (x) { return h('th', { text: x }); }))),
+        h('tbody', null, rows), h('tfoot', null, foot, foot2)),
+      h('p', { class: 'small muted', text: 'حالة الفترات — ' + stat + (A.complete && A.fullYear ? '' : ' · النجمة * = تقييم غير مكتمل') }),
+      cm.length ? h('div', { class: 'rpt-box' }, h('b', { text: 'ملاحظات المقيّم' }), cm) : null,
+      fu.length ? h('div', { class: 'rpt-box' }, h('b', { text: 'خطة المتابعة والتطوير' }),
+        h('table', { class: 'rpt-t' }, h('thead', null, h('tr', null, ['الفترة', 'الإجراء', 'الموعد', 'الحالة'].map(function (x) { return h('th', { text: x }); }))),
+          h('tbody', null, fu.map(function (f) { return h('tr', null, h('td', { text: PNAME[f.period] || f.period }), h('td', { text: f.action }), h('td', { class: 'ltr', text: f.due || '—' }), h('td', { text: f.status === 'done' ? 'تم' : 'مفتوح' })); })))) : null,
+      h('div', { class: 'rpt-sign' }, ['المقيّم المباشر', 'مدير الإدارة / CIO', 'الموظف'].map(function (x) { return h('div', null, h('div', { class: 'ln' }), h('span', { text: x })); })),
+      h('div', { class: 'rpt-foot', text: 'سري — للاستخدام الداخلي · منصة المتابعة والتقييم السنوي v' + B.version + ' · أُصدر ' + now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }));
+  }
+  function openReport(ids) {
+    if (isDirty()) { toast('احفظ التعديلات أولاً قبل إصدار التقرير', true); return; }
+    var emps = S.data.employees.filter(function (e) { return ids.indexOf(e.id) !== -1; });
+    if (!emps.length) { toast('لا يوجد موظفون', true); return; }
+    closeReport();
+    var box = h('div', { id: 'rpt', class: 'rpt' },
+      h('div', { class: 'rpt-bar no-print' }, h('b', { text: emps.length === 1 ? 'تقرير ' + emps[0].name : 'تقارير جميع الموظفين (' + emps.length + ')' }), h('span', { class: 'grow' }),
+        h('span', { class: 'small muted', text: 'في نافذة الطباعة اختر «حفظ بتنسيق PDF» (A4)' }),
+        h('button', { class: 'btn', id: 'rptPrint', onclick: function () { window.print(); } }, 'طباعة / حفظ PDF'),
+        h('button', { class: 'btn sec', id: 'rptClose', onclick: closeReport }, 'إغلاق')),
+      emps.map(function (e, i) { return reportBlock(e, i === emps.length - 1); }));
+    document.body.appendChild(box); document.body.classList.add('rpt-on');
+    var t0 = document.title; box.dataset.t = t0;
+    document.title = 'Appraisal_' + S.year + (emps.length === 1 ? '_' + emps[0].name.replace(/\s+/g, '_') : '_All');
+  }
+  function closeReport() {
+    var b = document.getElementById('rpt'); if (!b) return;
+    document.title = b.dataset.t; b.remove(); document.body.classList.remove('rpt-on');
   }
 
   /* ---------- follow-up ---------- */
