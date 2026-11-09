@@ -1,4 +1,4 @@
-# SRU Performance Appraisal · v1.1
+# SRU Performance Appraisal · v1.2
 منصة المتابعة والتقييم السنوي للأداء — ICTD / ITOC · Google Sheet backend (Apps Script) · @sr.edu.sa only
 
 | Page | URL |

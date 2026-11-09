@@ -1,5 +1,8 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.2 — 2026-11-09
+- Added GitHub → Apps Script auto-deploy (`.github/workflows/deploy-apps-script.yml`, clasp) and `AUTODEPLOY.md`; `.gitignore`. No application changes.
+
 ## v1.1 — 2026-11-09
 - `index.html`: sign-in landing now points to the deployed Apps Script web app (`/exec`). No other changes.
 
