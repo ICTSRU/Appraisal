@@ -1,5 +1,8 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.8 — 2026-11-10
+- **Fix:** the «لوحة المؤشرات» / «التقييم والمتابعة» header links now open in the top window (`target="_top"`). Inside the Apps Script sandbox iframe they loaded the page in the frame, which Google blocks (grey page with a "blocked" icon).
+
 ## v1.7 — 2026-11-09
 - **Users panel** (tab «المستخدمون», admin only): add / edit / deactivate / delete users, roles مدير · محرّر · تقييم الـ CIO · مطّلع, last sign-in, permission matrix. Owner account is fixed; nobody can change their own role or delete themselves.
 - **Server-enforced permissions**: one `PERMS` matrix in `Code.gs` + `requirePerm_()` on every `api*` call (the UI only mirrors it). Fixes: CIO/viewer can no longer post comments through the API; comment permission is checked before anything is written.

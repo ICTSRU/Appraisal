@@ -91,6 +91,7 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   /* ---------------- viewer ---------------- */
   let v = await open('v@sr.edu.sa', '/?year=2025&period=Q1'); await v.waitForSelector('#matrix');
   ok(await v.locator('#matrix input:not([disabled])').count() === 0, 'viewer read-only'); ok(!(await v.locator('#saveBar').isVisible()), 'no save bar for viewer'); ok(await v.locator('[data-tab=users]').count() === 0 && await v.locator('[data-tab=audit]').count() === 0, 'no users/audit tabs for viewer');
+  ok(await p.locator('#navDash').getAttribute('target') === '_top' && await p.locator('#navIndex').getAttribute('target') === '_top', 'page nav links target the top window (iframe-safe)');
   /* ---------------- users + audit tabs (admin) ---------------- */
   await p.selectOption('#yearSel', '2026'); await p.click('[data-tab=users]'); await p.waitForSelector('#usersTbl'); await p.screenshot({ path: SHOT + '/11_users.png', fullPage: true });
   ok(await p.locator('#usersTbl tbody tr').count() >= 3, 'users listed'); ok(await p.locator('#permTbl tbody tr').count() === 13, 'permission matrix 13 rows');
