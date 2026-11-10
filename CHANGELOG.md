@@ -1,5 +1,9 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v2.1 — 2026-11-10
+- Dashboard: new «الموظف» (by name) filter — pick one or several employees (or «الكل»); tiles, trend, distribution, ranking, table, heatmap, year-over-year and CSV all follow the selection. Works together with the year, sector and drafts filters.
+- Tests: e2e 65.
+
 ## v2.0 — 2026-11-10
 **Team page («فريق العمل»)**
 - New tab listing every employee with the overall appraisal of each year (score, %, band, draft/partial flags, change vs previous year, team average). Print / save as PDF.

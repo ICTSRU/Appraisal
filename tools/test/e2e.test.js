@@ -114,6 +114,11 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   ok(await d.locator('#draftWarn').count() === 0, 'no draft warning on final 2025');
   const top = (await d.locator('#tTop').textContent()); ok(/90\.3|90\.2/.test(top) && /Nawaz/.test(top), 'top performer 2025 = Nawaz 90.25 → ' + top);
   ok(await d.locator('#rankCard [data-rank]').count() === 11, '11 ranked');
+  { await d.click('#fName summary'); await d.click('[data-name=E02]'); await d.waitForSelector('#fName[open]');
+    ok(await d.locator('#rankCard [data-rank]').count() === 1 && (await d.locator('#fName summary').textContent()).includes('Nawaz'), 'name filter → only the chosen employee');
+    await d.click('[data-name=E01]'); ok(await d.locator('#rankCard [data-rank]').count() === 2, 'name filter accepts several names');
+    await d.screenshot({ path: SHOT + '/15_dashboard_name_filter.png' });
+    await d.click('#fNameAll'); await d.waitForSelector('#rankCard [data-rank]'); ok(await d.locator('#rankCard [data-rank]').count() === 11, 'clearing the name filter restores everyone'); }
   ok(await d.locator('#empTable tbody tr').count() === 12, 'table rows 11 + team');
   await d.selectOption('#fCmp', ''); await d.click('#fDraft'); await d.selectOption('#fYear', '2026'); await d.screenshot({ path: SHOT + '/08_dashboard_2026_final_only.png', fullPage: true });
   ok((await d.locator('#tDone').textContent()).includes('0%') || true, 'done tile');

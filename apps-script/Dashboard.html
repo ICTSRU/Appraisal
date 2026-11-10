@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="2.0">
+<meta name="version" content="2.1">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <?!= include('I18n') ?>
 <style>
+.namesel{position:relative;min-width:150px}.namesel summary{cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:6px 10px;background:var(--surface);list-style:none}.namesel summary::after{content:' ▾';float:inline-end}
+.namepanel{position:absolute;z-index:20;inset-inline-start:0;top:100%;margin-top:4px;min-width:220px;max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)}.nameopt{display:block;padding:3px 2px;cursor:pointer}
 :root{--s1:#7d52c4;--s2:#1b86c4}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px}
 .tile{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--purple);border-radius:var(--radius);padding:10px 14px}
@@ -54,7 +56,7 @@ svg text{font-family:Arial,Cairo,sans-serif}
   var B = window.BOOT, PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'];
   var PN = { Q1: _t('الربع 1'), Q2: _t('الربع 2'), Q3: _t('الربع 3'), Q4: _t('الربع 4') };
   window.__onTheme = function () { if (D) render(); };
-  var D = null, F = { year: null, cmp: null, drafts: true, sector: '' };
+  var D = null, F = { year: null, cmp: null, drafts: true, sector: '', names: [] };   // names = employee ids picked in the «الموظف» filter (empty = everyone)
   var app = document.getElementById('app'), tip = document.getElementById('tip');
 
   function h(tag, props) {
@@ -99,7 +101,7 @@ svg text{font-family:Arial,Cairo,sans-serif}
   function view(year) {
     var yd = D.years[year]; if (!yd) return null;
     var comp = F.drafts ? yd.computed : yd.computedFinal;
-    var ids = yd.employees.filter(function (id) { return (!F.sector || emp(id).sector === F.sector) && comp.annual[id] && comp.annual[id].n > 0; });   // only employees with scores that year
+    var ids = yd.employees.filter(function (id) { return (!F.sector || emp(id).sector === F.sector) && (!F.names.length || F.names.indexOf(id) !== -1) && comp.annual[id] && comp.annual[id].n > 0; });   // only employees with scores that year
     var active = yd.criteria.filter(function (c) { return c.active; });
     var max = active.reduce(function (s, c) { return s + c.max; }, 0);
     var annual = {}; ids.forEach(function (id) { annual[id] = comp.annual[id]; });
@@ -111,10 +113,28 @@ svg text{font-family:Arial,Cairo,sans-serif}
     return { year: year, yd: yd, comp: comp, ids: ids, active: active, max: max, annual: annual, valid: valid, teamQ: teamQ,
              avg: mean(valid.map(function (id) { return annual[id].total; })), slots: slots, done: done, drafts: drafts };
   }
+  function nameFilter() {
+    var all = D.employees.filter(function (e) { return Object.keys(D.years).some(function (y) { var a = D.years[y].computed.annual[e.id]; return a && a.n > 0; }); });
+    var box = h('div', { class: 'namepanel', id: 'fNamePanel' });
+    function toggle(id, on) { var i = F.names.indexOf(id); if (on && i === -1) F.names.push(id); if (!on && i !== -1) F.names.splice(i, 1); }
+    box.appendChild(h('div', { class: 'row', style: 'margin-bottom:6px' },
+      h('button', { class: 'btn sec sm', id: 'fNameAll', onclick: function () { F.names = []; render(); } }, _t('الكل')),
+      h('button', { class: 'btn sec sm', onclick: function () { F.names = all.map(function (e) { return e.id; }); render(); } }, _t('تحديد الكل'))));
+    all.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (e) {
+      box.appendChild(h('label', { class: 'small nameopt' }, h('input', { type: 'checkbox', 'data-name': e.id, checked: F.names.indexOf(e.id) !== -1,
+        onchange: function () { toggle(e.id, this.checked); render(true); } }), ' ' + e.name));
+    });
+    var label = !F.names.length ? _t('الكل') : F.names.length === 1 ? emp(F.names[0]).name : F.names.length + ' ' + _t('موظف');
+    var det = h('details', { class: 'namesel', id: 'fName', open: nameOpen }, h('summary', { text: label }), box);
+    det.addEventListener('toggle', function () { nameOpen = det.open; });
+    return h('label', { class: 'f' }, _t('الموظف'), det);
+  }
+  var nameOpen = false;
   function sectors() { var s = {}; D.employees.forEach(function (e) { if (e.sector) s[e.sector] = 1; }); return Object.keys(s).sort(); }
 
   /* -------------------------------- render ------------------------------- */
-  function render() {
+  function render(keepOpen) {
+    if (keepOpen === true) nameOpen = true;
     var V = view(F.year), C = F.cmp && F.cmp !== F.year ? view(F.cmp) : null;
     app.innerHTML = '';
     app.appendChild(filters());
@@ -136,6 +156,7 @@ svg text{font-family:Arial,Cairo,sans-serif}
     var sc = sectors();
     return h('div', { class: 'card no-print' }, h('div', { class: 'row' },
       h('label', { class: 'f' }, _t('السنة'), ysel), h('label', { class: 'f' }, _t('مقارنة مع'), csel),
+      nameFilter(),
       sc.length ? h('label', { class: 'f' }, _t('القطاع'), h('select', { id: 'fSec', onchange: function () { F.sector = this.value; render(); } }, h('option', { value: '', text: _t('الكل') }), sc.map(function (s) { return h('option', { value: s, selected: s === F.sector, text: s }); }))) : null,
       h('label', { class: 'small', style: 'align-self:end;padding-bottom:6px' }, h('input', { type: 'checkbox', id: 'fDraft', checked: F.drafts, onchange: function () { F.drafts = this.checked; render(); } }), _t(' تضمين المسودات')),
       h('span', { class: 'grow' }), h('button', { class: 'btn sec sm', onclick: function () { window.print(); } }, _t('طباعة')), h('button', { class: 'btn sec sm', id: 'btnCsv', onclick: csv }, _t('تصدير CSV'))));
@@ -276,7 +297,7 @@ svg text{font-family:Arial,Cairo,sans-serif}
   function yoyCard() {
     var ys = Object.keys(D.years).map(Number).sort(function (a, b) { return a - b; });
     var vs = ys.map(view);
-    var ids = D.employees.filter(function (e) { return (!F.sector || e.sector === F.sector) && vs.some(function (v) { return v && v.annual[e.id]; }); }).map(function (e) { return e.id; });
+    var ids = D.employees.filter(function (e) { return (!F.sector || e.sector === F.sector) && (!F.names.length || F.names.indexOf(e.id) !== -1) && vs.some(function (v) { return v && v.annual[e.id]; }); }).map(function (e) { return e.id; });
     var head = h('tr', null, [h('th', { text: _t('الموظف') })].concat(ys.map(function (y) { return h('th', { text: String(y) }); }), [h('th', { text: _t('آخر تغير') })]));
     var body = ids.map(function (id) {
       var vals = vs.map(function (v) { var a = v && v.annual[id]; return a && a.complete ? a.total : null; });
