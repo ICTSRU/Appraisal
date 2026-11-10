@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.9">
+<meta name="version" content="2.0">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <?!= include('I18n') ?>
 <style>
+.linkbtn{background:none;border:0;padding:0;color:var(--link,var(--purple));cursor:pointer;font:inherit;text-align:start}.linkbtn:hover{text-decoration:underline}.rpt-inline .rpt-page{margin:0 auto;border:0}
 .matrix{border-collapse:separate;border-spacing:0;font-size:.85rem}
 .matrix th,.matrix td{border-bottom:1px solid var(--border);border-inline-start:1px solid var(--border);padding:3px 6px;background:var(--surface)}
 .matrix thead th{position:sticky;top:0;background:var(--purple-light);color:var(--htext);z-index:3;font-size:.8rem;text-align:center}
@@ -76,7 +77,7 @@ td.overdue{background:#fdecea}
   window.__onTheme = function () {};
   var B = window.BOOT, PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'];
   var PNAME = { Q1: _t('الربع الأول'), Q2: _t('الربع الثاني'), Q3: _t('الربع الثالث'), Q4: _t('الربع الرابع'), ANNUAL: _t('السنوي') };
-  var S = { boot: null, year: null, data: null, period: 'Q1', tab: 'eval', view: 'matrix', emp: null, dirty: {}, invalid: {}, cdirty: {}, onlyOpen: true };
+  var S = { boot: null, year: null, data: null, period: 'Q1', tab: 'eval', view: 'matrix', emp: null, dirty: {}, invalid: {}, cdirty: {}, onlyOpen: true, team: { ds: null, loading: false, emp: null } };
   var app = document.getElementById('app');
 
   /* ------------------------------ helpers ------------------------------ */
@@ -125,6 +126,7 @@ td.overdue{background:#fdecea}
     var b = bandsSorted()[idx];
     return h('span', { class: 'band b' + Math.min(idx, 4) }, bn(b));
   }
+  function editingView() { return B.role !== 'viewer' && S.period !== 'ANNUAL' && (S.tab === 'eval' || (S.tab === 'team' && !!S.team.emp)); }
   function isDirty() { return Object.keys(S.dirty).length > 0 || Object.keys(S.cdirty).length > 0; }
 
   /* ------------------------------ data access -------------------------- */
@@ -192,21 +194,23 @@ td.overdue{background:#fdecea}
       render();
     });
   }
-  function applyData(d) { S.data = d; render(); }
+  function applyData(d) { S.data = d; S.team.ds = null; render(); }
 
   /* ------------------------------ render ------------------------------- */
   function render() {
     app.innerHTML = '';
-    app.appendChild(toolbar());
-    var tabs = [['eval', _t('التقييم')], ['follow', _t('المتابعة')]];
+    if (S.tab === 'team' && S.team.emp) S.team.emp = S.emp;
+    if (!(S.tab === 'team' && !S.team.emp)) app.appendChild(toolbar());
+    var tabs = [['eval', _t('التقييم')], ['team', _t('فريق العمل')], ['follow', _t('المتابعة')]];
     if (can('users.manage')) tabs.push(['users', _t('المستخدمون')]);
     if (can('audit.read')) tabs.push(['audit', _t('سجل التدقيق')]);
     if (can('bands.write')) tabs.push(['settings', _t('الإعدادات')]);
     app.appendChild(h('div', { class: 'tabs no-print', style: 'margin-bottom:12px', role: 'tablist' },
-      tabs.map(function (t) { return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), role: 'tab', 'data-tab': t[0], onclick: function () { S.tab = t[0]; if (t[0] === 'users') S.users = null; if (t[0] === 'audit') AU.rows = null; render(); } }, t[1]); })));
+      tabs.map(function (t) { return h('button', { class: 'tab' + (S.tab === t[0] ? ' on' : ''), role: 'tab', 'data-tab': t[0], onclick: function () { S.tab = t[0]; if (t[0] === 'users') S.users = null; if (t[0] === 'team') S.team.ds = null; if (t[0] === 'audit') AU.rows = null; render(); } }, t[1]); })));
     var pane = h('div', { id: 'pane' });
     app.appendChild(pane);
     if (S.tab === 'eval') pane.appendChild(S.period === 'ANNUAL' ? annualPane() : (S.view === 'matrix' ? matrixPane() : employeePane()));
+    else if (S.tab === 'team') pane.appendChild(teamPane());
     else if (S.tab === 'follow') pane.appendChild(followPane());
     else if (S.tab === 'users' && can('users.manage')) pane.appendChild(usersPane());
     else if (S.tab === 'audit' && can('audit.read')) pane.appendChild(auditPane());
@@ -360,7 +364,7 @@ td.overdue{background:#fdecea}
     if (!e) return h('div', { class: 'alert info', text: _t('لا يوجد موظفون.') });
     var nav = h('div', { class: 'empnav' }, emps.map(function (x) {
       var t = totals(p, x.id);
-      return h('button', { class: x.id === e.id ? 'on' : '', 'data-emp': x.id, onclick: function () { S.emp = x.id; render(); } },
+      return h('button', { class: x.id === e.id ? 'on' : '', 'data-emp': x.id, onclick: function () { S.emp = x.id; if (S.team.emp) S.team.emp = x.id; render(); } },
         x.name, h('div', { class: 'small muted' }, t.n ? fmt(t.total) + ' / ' + t.max + (t.complete ? '' : _t(' (ناقص)')) : _t('لم يُقيَّم')));
     }));
     var t = totals(p, e.id);
@@ -420,43 +424,44 @@ td.overdue{background:#fdecea}
 
   /* ---------- individual report (PDF via print) ---------- */
   function bandText(idx) { var b = bandsSorted()[idx]; return idx < 0 || !b ? _t('غير مكتمل') : bn(b); }
-  function reportBlock(e, last) {
+  function reportBlock(e, last, rp) {
     var d = S.data, cs = crits(), A = d.computed.annual[e.id], now = new Date();
+    var cols = rp ? [rp] : PERIODS, R = rp ? d.computed.periods[rp][e.id] : A;   // rp = a single quarter chosen for the PDF; empty = whole year
     var rows = [], grp = null;
     cs.forEach(function (c) {
       var g = gn(c) || '';
-      if (g !== grp) { grp = g; rows.push(h('tr', { class: 'grp' }, h('td', { colspan: 7, text: g }))); }
+      if (g !== grp) { grp = g; rows.push(h('tr', { class: 'grp' }, h('td', { colspan: cols.length + (rp ? 2 : 3), text: g }))); }
       var av = A.items[c.id];
       rows.push(h('tr', null, h('td', { text: cn(c) }), h('td', { class: 'ltr', text: c.max }),
-        PERIODS.map(function (p) { var v = getScore(p, e.id, c.id); return h('td', { class: 'ltr', text: v === null ? '—' : fmt(v) }); }),
-        h('td', { class: 'ltr', text: av === undefined ? '—' : fmt(av) })));
+        cols.map(function (p) { var v = getScore(p, e.id, c.id); return h('td', { class: 'ltr', text: v === null ? '—' : fmt(v) }); }),
+        rp ? null : h('td', { class: 'ltr', text: av === undefined ? '—' : fmt(av) })));
     });
     var max = A.max;
     var foot = h('tr', { class: 'tot' }, h('td', { text: _t('المجموع / Total') }), h('td', { class: 'ltr', text: max }),
-      PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { class: 'ltr', text: r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—' }); }),
-      h('td', { class: 'ltr', text: A.n ? fmt(A.total) + (A.complete ? '' : ' *') : '—' }));
+      cols.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { class: 'ltr', text: r.n ? fmt(r.total) + (r.complete ? '' : ' *') : '—' }); }),
+      rp ? null : h('td', { class: 'ltr', text: A.n ? fmt(A.total) + (A.complete ? '' : ' *') : '—' }));
     var foot2 = h('tr', { class: 'tot' }, h('td', { text: _t('النسبة والتقدير') }), h('td'),
-      PERIODS.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { text: r.n ? fmt(r.pct) + '%' + (r.complete ? ' · ' + bn(bandsSorted()[r.band]) : '') : '—' }); }),
-      h('td', { text: A.n ? fmt(A.pct) + '%' : '—' }));
-    var stat = PERIODS.map(function (p) { return PNAME[p] + ': ' + (pStatus(p) === 'final' ? _t('معتمد') : _t('مسودة')); }).join(' · ');
-    var anyDraft = PERIODS.some(function (p) { return pStatus(p) !== 'final' && d.computed.periods[p][e.id].n; });
-    var cm = PERIODS.filter(function (p) { var c = d.comments[p + '|' + e.id]; return c && c.text; }).map(function (p) {
+      cols.map(function (p) { var r = d.computed.periods[p][e.id]; return h('td', { text: r.n ? fmt(r.pct) + '%' + (r.complete ? ' · ' + bn(bandsSorted()[r.band]) : '') : '—' }); }),
+      rp ? null : h('td', { text: A.n ? fmt(A.pct) + '%' : '—' }));
+    var stat = cols.map(function (p) { return PNAME[p] + ': ' + (pStatus(p) === 'final' ? _t('معتمد') : _t('مسودة')); }).join(' · ');
+    var anyDraft = cols.some(function (p) { return pStatus(p) !== 'final' && d.computed.periods[p][e.id].n; });
+    var cm = cols.filter(function (p) { var c = d.comments[p + '|' + e.id]; return c && c.text; }).map(function (p) {
       return h('div', { class: 'rc' }, h('b', { text: PNAME[p] + ': ' }), d.comments[p + '|' + e.id].text); });
     var nameOf = e.name;
-    var fu = d.followups.filter(function (f) { return f.empId === e.id; });
+    var fu = d.followups.filter(function (f) { return f.empId === e.id && (!rp || f.period === rp); });
     return h('section', { class: 'rpt-page', 'data-rpt': e.id, style: last ? '' : 'break-after:page' },
       h('div', { class: 'rpt-head' }, h('img', { src: ITOC_LOGOS.sru, alt: '' }), h('div', { class: 'grow' }, h('div', { class: 'rt', text: _t('تقرير تقييم الأداء الفردي') }),
-        h('div', { class: 'rs', text: (window.LANG === 'en' ? 'Year ' : 'Individual Performance Appraisal Report · ') + S.year })), h('img', { src: ITOC_LOGOS.itoc, alt: '' })),
+        h('div', { class: 'rs', text: (window.LANG === 'en' ? 'Year ' : 'Individual Performance Appraisal Report · ') + S.year + (rp ? ' · ' + PNAME[rp] : '') })), h('img', { src: ITOC_LOGOS.itoc, alt: '' })),
       h('table', { class: 'rpt-info' }, h('tr', null, h('th', { text: _t('الموظف') }), h('td', { text: e.fullName || e.name }), h('th', { text: _t('القطاع') }), h('td', { text: e.sector || '—' })),
-        h('tr', null, h('th', { text: _t('السنة') }), h('td', { text: S.year }), h('th', { text: _t('الفترات') }), h('td', { text: A.quarters + '/4' + (A.fullYear ? '' : _t(' — سنة جزئية')) }))),
+        h('tr', null, h('th', { text: _t('السنة') }), h('td', { text: S.year }), h('th', { text: _t('الفترات') }), h('td', { text: rp ? PNAME[rp] : A.quarters + '/4' + (A.fullYear ? '' : _t(' — سنة جزئية')) }))),
       h('div', { class: 'kpi rpt-kpi' },
-        h('div', { class: 'k' }, h('span', { class: 'small muted', text: _t('الدرجة السنوية') }), h('b', { text: A.n ? fmt(A.total) + ' / ' + max : '—' })),
-        h('div', { class: 'k' }, h('span', { class: 'small muted', text: _t('النسبة') }), h('b', { text: A.n ? fmt(A.pct) + '%' : '—' })),
-        h('div', { class: 'k' }, h('span', { class: 'small muted', text: _t('التقدير') }), h('b', { style: 'direction:rtl', text: bandText(A.band) }))),
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: rp ? _t('درجة الفترة') : _t('الدرجة السنوية') }), h('b', { text: R.n ? fmt(R.total) + ' / ' + max : '—' })),
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: _t('النسبة') }), h('b', { text: R.n ? fmt(R.pct) + '%' : '—' })),
+        h('div', { class: 'k' }, h('span', { class: 'small muted', text: _t('التقدير') }), h('b', { style: 'direction:rtl', text: bandText(R.band) }))),
       anyDraft ? h('div', { class: 'rpt-warn', text: _t('تنبيه: يتضمن التقرير فترات غير معتمدة (مسودة) — النتائج مبدئية.') }) : null,
-      h('table', { class: 'rpt-t' }, h('thead', null, h('tr', null, [_t('البند / Criterion'), _t('الدرجة'), 'Q1', 'Q2', 'Q3', 'Q4', _t('المتوسط السنوي')].map(function (x) { return h('th', { text: x }); }))),
+      h('table', { class: 'rpt-t' }, h('thead', null, h('tr', null, [_t('البند / Criterion'), _t('الدرجة')].concat(cols, rp ? [] : [_t('المتوسط السنوي')]).map(function (x) { return h('th', { text: x }); }))),
         h('tbody', null, rows), h('tfoot', null, foot, foot2)),
-      h('p', { class: 'small muted', text: _t('حالة الفترات — ') + stat + (A.complete && A.fullYear ? '' : _t(' · النجمة * = تقييم غير مكتمل')) }),
+      h('p', { class: 'small muted', text: _t('حالة الفترات — ') + stat + ((rp ? R.complete : A.complete && A.fullYear) ? '' : _t(' · النجمة * = تقييم غير مكتمل')) }),
       cm.length ? h('div', { class: 'rpt-box' }, h('b', { text: _t('ملاحظات المقيّم') }), cm) : null,
       fu.length ? h('div', { class: 'rpt-box' }, h('b', { text: _t('خطة المتابعة والتطوير') }),
         h('table', { class: 'rpt-t' }, h('thead', null, h('tr', null, [_t('الفترة'), _t('الإجراء'), _t('الموعد'), _t('الحالة')].map(function (x) { return h('th', { text: x }); }))),
@@ -464,24 +469,91 @@ td.overdue{background:#fdecea}
       h('div', { class: 'rpt-sign' }, [_t('المقيّم المباشر'), _t('مدير الإدارة / CIO'), _t('الموظف')].map(function (x) { return h('div', null, h('div', { class: 'ln' }), h('span', { text: x })); })),
       h('div', { class: 'rpt-foot', text: _t('سري — للاستخدام الداخلي · منصة المتابعة والتقييم السنوي v') + B.version + _t(' · أُصدر ') + now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }));
   }
-  function openReport(ids) {
+  function openReport(ids, rp) {
+    rp = PERIODS.indexOf(rp) !== -1 ? rp : '';
     if (isDirty()) { toast(_t('احفظ التعديلات أولاً قبل إصدار التقرير'), true); return; }
     var emps = S.data.employees.filter(function (e) { return ids.indexOf(e.id) !== -1; });
     if (!emps.length) { toast(_t('لا يوجد موظفون'), true); return; }
     closeReport();
+    var psel = h('select', { id: 'rptPeriod', 'aria-label': _t('الفترة المطلوبة') }, h('option', { value: '' }, _t('السنة كاملة')),
+      PERIODS.map(function (q) { return h('option', { value: q, selected: q === rp }, PNAME[q]); }));
+    psel.addEventListener('change', function () { openReport(ids, psel.value); });
     var box = h('div', { id: 'rpt', class: 'rpt' },
       h('div', { class: 'rpt-bar no-print' }, h('b', { text: emps.length === 1 ? _t('تقرير ') + emps[0].name : _t('تقارير جميع الموظفين (') + emps.length + ')' }), h('span', { class: 'grow' }),
+        h('label', { class: 'small' }, _t('الفترة المطلوبة'), ' ', psel),
         h('span', { class: 'small muted', text: _t('في نافذة الطباعة اختر «حفظ بتنسيق PDF» (A4)') }),
         h('button', { class: 'btn', id: 'rptPrint', onclick: function () { window.print(); } }, _t('طباعة / حفظ PDF')),
         h('button', { class: 'btn sec', id: 'rptClose', onclick: closeReport }, _t('إغلاق'))),
-      emps.map(function (e, i) { return reportBlock(e, i === emps.length - 1); }));
+      emps.map(function (e, i) { return reportBlock(e, i === emps.length - 1, rp); }));
     document.body.appendChild(box); document.body.classList.add('rpt-on');
     var t0 = document.title; box.dataset.t = t0;
-    document.title = 'Appraisal_' + S.year + (emps.length === 1 ? '_' + emps[0].name.replace(/\s+/g, '_') : '_All');
+    document.title = 'Appraisal_' + S.year + (rp ? '_' + rp : '') + (emps.length === 1 ? '_' + emps[0].name.replace(/\s+/g, '_') : '_All');
   }
   function closeReport() {
     var b = document.getElementById('rpt'); if (!b) return;
     document.title = b.dataset.t; b.remove(); document.body.classList.remove('rpt-on');
+  }
+
+
+  /* ---------- team page: every employee × every year; click a name → detailed report (editable) ---------- */
+  function teamPane() {
+    var T = S.team;
+    if (T.emp) return teamDetail();
+    if (!T.ds) {
+      if (!T.loading) { T.loading = true; call('apiDataset').then(function (ds) { T.ds = ds; T.loading = false; render(); }).catch(function (e) { T.loading = false; fail(e); }); }
+      return h('div', { class: 'card' }, h('p', { class: 'muted', text: _t('جارٍ التحميل…') }));
+    }
+    var ds = T.ds, years = Object.keys(ds.years).map(Number).sort(function (a, b) { return a - b; });
+    var bandsDs = ds.bands.slice().sort(function (a, b) { return b.min - a.min; });
+    var emps = ds.employees.filter(function (e) { return years.some(function (y) { return ds.years[y].employees.indexOf(e.id) !== -1; }); });
+    function A(y, id) { var a = ds.years[y].computed.annual[id]; return a && a.n > 0 ? a : null; }
+    function draftOf(y) { var pr = ds.years[y].periods; return Object.keys(pr).some(function (q) { return pr[q].status !== 'final'; }); }
+    var head = h('tr', null, h('th', { text: '#' }), h('th', { text: _t('الموظف') }),
+      years.map(function (y) { return h('th', null, String(y), draftOf(y) ? h('span', { class: 'badge draft', style: 'margin-inline-start:6px', text: _t('مسودة') }) : null); }),
+      h('th', { text: _t('التغيّر') }));
+    var body = emps.map(function (e, i) {
+      var cells = years.map(function (y) {
+        var a = A(y, e.id);
+        if (!a) return h('td', { class: 'muted', text: ds.years[y].employees.indexOf(e.id) === -1 ? '—' : _t('لم يُقيَّم') });
+        return h('td', null, h('button', { class: 'cellbtn', 'data-team-cell': e.id + '|' + y, title: _t('فتح التقرير التفصيلي'), onclick: function () { teamOpen(e.id, y); } },
+          h('b', { class: 'ltr', text: fmt(Math.round(a.total * 10) / 10) + ' / ' + a.max }), ' ', h('span', { class: 'small muted ltr', text: fmt(Math.round(a.pct * 10) / 10) + '%' }),
+          h('div', null, a.complete && a.fullYear ? h('span', { class: 'band b' + Math.min(a.band, 4) }, bn(bandsDs[a.band])) : h('span', { class: 'small muted', text: a.complete ? _t('سنة جزئية') : _t('غير مكتمل') }))));
+      });
+      var vals = years.map(function (y) { return A(y, e.id); }).filter(Boolean), chg = '';
+      if (vals.length > 1) { var d = vals[vals.length - 1].pct - vals[vals.length - 2].pct; chg = (d > 0.05 ? '▲ +' : d < -0.05 ? '▼ ' : '＝ ') + fmt(Math.round(d * 10) / 10) + '%'; }
+      return h('tr', { 'data-team-emp': e.id }, h('td', { class: 'muted', text: i + 1 }),
+        h('td', null, h('button', { class: 'linkbtn', 'data-team-open': e.id, onclick: function () { teamOpen(e.id); } }, h('b', { text: e.name })), e.fullName ? h('div', { class: 'small muted', text: e.fullName }) : null,
+          e.active ? null : h('span', { class: 'badge', style: 'margin-inline-start:6px', text: _t('غير فعّال') })),
+        cells, h('td', { class: 'ltr', text: chg || '—' }));
+    });
+    var avgRow = h('tr', { class: 'tot' }, h('td'), h('td', { text: _t('متوسط الفريق') }), years.map(function (y) {
+      var v = emps.map(function (e) { return A(y, e.id); }).filter(Boolean);
+      return h('td', { text: v.length ? fmt(Math.round(v.reduce(function (s, a) { return s + a.pct; }, 0) / v.length * 10) / 10) + '%' + ' · ' + v.length + ' ' + _t('موظف') : '—' });
+    }), h('td'));
+    return h('div', { class: 'card' },
+      h('div', { class: 'row no-print' }, h('h2', { style: 'margin:0', text: _t('فريق العمل — التقييم الإجمالي لكل سنة') }), h('span', { class: 'grow' }),
+        h('button', { class: 'btn sec sm', id: 'teamPrint', onclick: function () { window.print(); } }, _t('طباعة / حفظ PDF'))),
+      h('p', { class: 'muted small no-print', text: _t('اضغط على اسم الموظف (أو على درجته في سنة معينة) لفتح تقريره التفصيلي. أي تعديل يُحفظ ينعكس هنا تلقائياً.') }),
+      h('div', { class: 'scroll' }, h('table', { class: 't', id: 'teamTbl' }, h('thead', null, head), h('tbody', null, body), h('tfoot', null, avgRow))));
+  }
+  function teamOpen(id, year) {
+    var ds = S.team.ds, ys = Object.keys(ds.years).map(Number).filter(function (y) { return ds.years[y].employees.indexOf(id) !== -1; }).sort(function (a, b) { return a - b; });
+    var y = year || ys.filter(function (q) { var a = ds.years[q].computed.annual[id]; return a && a.n > 0; }).pop() || ys.pop() || S.year;
+    var last = 'Q1'; PERIODS.forEach(function (p) { if (Object.keys(ds.years[y].scores).some(function (k) { return k.indexOf(p + '|' + id + '|') === 0; })) last = p; });
+    S.team.emp = id; S.emp = id; S.period = last; S.dirty = {}; S.cdirty = {}; S.invalid = {};
+    loadYear(y).catch(fail);
+  }
+  function teamDetail() {
+    var e = S.data.employees.filter(function (x) { return x.id === S.emp; })[0];
+    var back = h('div', { class: 'row no-print', style: 'margin-bottom:10px' },
+      h('button', { class: 'btn sec sm', id: 'teamBack', onclick: function () {
+        if (isDirty() && !confirm(_t('توجد تعديلات غير محفوظة سيتم تجاهلها. متابعة؟'))) return;
+        S.dirty = {}; S.cdirty = {}; S.invalid = {}; S.team.emp = null; S.team.ds = null; render(); } }, _t('→ العودة إلى جدول الفريق')),
+      h('span', { class: 'grow' }),
+      e ? h('button', { class: 'btn sm', id: 'teamPdf', onclick: function () { openReport([e.id], S.period === 'ANNUAL' ? '' : S.period); } }, _t('تصدير التقرير PDF')) : null);
+    if (!e) return h('div', null, back, h('div', { class: 'alert info', text: _t('الموظف غير مُدرج في هذه السنة — اختر سنة أخرى.') }));
+    if (S.period === 'ANNUAL') return h('div', null, back, h('div', { class: 'card rpt-inline' }, reportBlock(e, true, '')));
+    return h('div', null, back, employeePane());
   }
 
   /* ---------- follow-up ---------- */
@@ -684,14 +756,14 @@ td.overdue{background:#fdecea}
       h('span', { id: 'saveMsg' }), h('span', { class: 'grow' }),
       h('button', { class: 'btn sec', id: 'btnDiscard', onclick: function () { if (confirm(_t('تجاهل التعديلات غير المحفوظة؟'))) { S.dirty = {}; S.cdirty = {}; S.invalid = {}; render(); } } }, _t('تجاهل')),
       h('button', { class: 'btn', id: 'btnSave', onclick: save }, _t('حفظ التعديلات')));
-    if (B.role === 'viewer' || S.tab !== 'eval' || S.period === 'ANNUAL') bar.classList.add('hide');
+    if (!editingView()) bar.classList.add('hide');
     setTimeout(updateSaveBar, 0);
     return bar;
   }
   function updateSaveBar() {
     var bar = document.getElementById('saveBar'); if (!bar) return;
     var n = Object.keys(S.dirty).length + Object.keys(S.cdirty).length, bad = Object.keys(S.invalid).length;
-    var hideAlways = B.role === 'viewer' || S.tab !== 'eval' || S.period === 'ANNUAL';
+    var hideAlways = !editingView();
     bar.classList.toggle('hide', hideAlways || (!n && !bad));
     document.getElementById('saveMsg').textContent = bad ? _t('توجد درجات غير صالحة (') + bad + _t(') — صحّحها قبل الحفظ') : _t('تعديلات غير محفوظة: ') + n;
     document.getElementById('btnSave').disabled = !!bad || !n;
@@ -705,7 +777,7 @@ td.overdue{background:#fdecea}
     ps.reduce(function (chain, p) {
       return chain.then(function () { return call('apiSaveScores', S.year, p, byPeriod[p].ch, byPeriod[p].cm).then(function (d) { last = d; delete_p(p); }); });
     }, Promise.resolve()).then(function () {
-      S.data = last; S.invalid = {}; toast(_t('تم الحفظ')); render();
+      S.data = last; S.invalid = {}; S.team.ds = null; toast(_t('تم الحفظ')); render();
     }).catch(function (e) { fail(e); btn.disabled = false; btn.textContent = _t('حفظ التعديلات'); if (last) { S.data = last; } });
   }
   function delete_p(p) {

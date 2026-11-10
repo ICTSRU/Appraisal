@@ -1,5 +1,12 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v2.0 — 2026-11-10
+**Team page («فريق العمل»)**
+- New tab listing every employee with the overall appraisal of each year (score, %, band, draft/partial flags, change vs previous year, team average). Print / save as PDF.
+- Click a name (or a year cell) → detailed report of that employee, editable (same permissions as the Evaluation tab); every saved change is reflected in the team table on return.
+- «Annual» period shows the full annual report inline; «Export report PDF» works for the chosen period (one quarter or the whole year) — the period can also be switched inside the PDF preview.
+- Tests: e2e 62 (new team-page scenarios incl. viewer read-only), unit 105, admin 122, i18n 12.
+
 ## v1.9 — 2026-11-10
 **2026 completed from 2025 — with deliberate differences (indicative draft data)**
 - `tools/derive_year.py` derives 2026 from 2025 inside `Seed.gs` (deterministic, re-runnable).

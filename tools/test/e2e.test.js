@@ -120,5 +120,36 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   const dm = await open('m.elmahdy@sr.edu.sa', '/?page=dashboard', { width: 390, height: 800 }); await dm.waitForSelector('#tAvg'); await dm.screenshot({ path: SHOT + '/09_dashboard_mobile.png', fullPage: true });
   const im = await open('m.elmahdy@sr.edu.sa', '/', { width: 390, height: 800 }); await im.waitForSelector('#matrix'); await im.screenshot({ path: SHOT + '/10_index_mobile.png' });
   ok(errors.length === 0, 'no page errors: ' + errors.join(' | '));
+
+  /* ---------------- team page: overview → detail → edit → overview → period PDF ---------------- */
+  { const t = await open('m.elmahdy@sr.edu.sa', '/'); await t.waitForSelector('#matrix');
+    await t.click('[data-tab=team]'); await t.waitForSelector('#teamTbl');
+    ok(await t.locator('#teamTbl tbody tr').count() >= 13, 'team table lists every employee of every year (11 + 2 new hires)');
+    ok(await t.locator('#teamTbl thead th').count() === 2 + G.api.apiBoot().years.length + 1, 'columns: #, name, one per year, change');
+    ok(await t.locator('[data-team-emp=E10] [data-team-cell]').count() === 1, 'E10 has 2025 only');
+    await t.screenshot({ path: SHOT + '/12_team.png', fullPage: true });
+    const before = await t.locator('[data-team-emp=E02] [data-team-cell$="|2026"]').textContent();
+    await t.click('[data-team-open=E02]'); await t.waitForSelector('#teamBack');
+    ok(await t.locator('#yearSel').inputValue() === '2026', 'detail opens on latest scored year');
+    await t.click('[data-period=Q1]'); await t.waitForSelector('[data-crit=C01]');
+    const cur = Number(await t.locator('[data-crit=C01] button.on').first().getAttribute('data-v'));
+    await t.click('[data-crit=C01] button[data-v="' + (cur === 1 ? 2 : 1) + '"]'); await t.click('#btnSave'); await t.waitForSelector('.toast');
+    await t.screenshot({ path: SHOT + '/13_team_detail.png', fullPage: true });
+    await t.click('#teamBack'); await t.waitForSelector('#teamTbl');
+    const after = await t.locator('[data-team-emp=E02] [data-team-cell$="|2026"]').textContent();
+    ok(before !== after, 'an edit in the detail view is reflected in the team table (' + before.trim() + ' → ' + after.trim() + ')');
+    await t.click('[data-team-cell="E02|2025"]'); await t.waitForSelector('#teamBack');
+    ok(await t.locator('#yearSel').inputValue() === '2025', 'clicking a year cell opens that year');
+    await t.click('[data-period=Q2]'); await t.click('#teamPdf'); await t.waitForSelector('#rpt');
+    ok(await t.locator('#rpt .rpt-t').first().locator('thead th').count() === 3, 'PDF of one chosen period has criterion/max/score columns only');
+    ok((await t.locator('#rpt .rpt-head .rs').textContent()).includes('Q2') || (await t.locator('#rpt .rpt-head .rs').textContent()).includes('الربع الثاني'), 'report names the period');
+    await t.selectOption('#rptPeriod', ''); await t.waitForSelector('#rpt .rpt-t');
+    ok(await t.locator('#rpt .rpt-t').first().locator('thead th').count() === 7, 'whole-year PDF keeps Q1–Q4 + average');
+    await t.screenshot({ path: SHOT + '/14_team_report.png' });
+    await t.click('#rptClose'); await t.click('[data-period=ANNUAL]'); await t.waitForSelector('.rpt-inline');
+    ok(await t.locator('.rpt-inline .rpt-page').count() === 1, 'annual period shows the detailed annual report inline');
+    const v = await open('v@sr.edu.sa', '/'); await v.waitForSelector('#matrix'); await v.click('[data-tab=team]'); await v.waitForSelector('#teamTbl');
+    await v.click('[data-team-open=E02]'); await v.waitForSelector('#teamBack'); ok(await v.locator('#saveBar:not(.hide)').count() === 0, 'viewer sees the detail but cannot edit');
+  }
   await browser.close(); srv.close(); console.log('e2e passed:', pass);
 })().catch(async e => { console.error('E2E FAIL:', (e.stack.match(/e2e.test.js:\d+/)||[''])[0], e.message.split('\n').slice(0, 6).join('\n'), '\nerrors:', (globalThis.errors||[]).join(' | ')); process.exit(1); });
