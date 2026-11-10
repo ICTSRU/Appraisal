@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="version" content="1.8">
+<meta name="version" content="1.9">
 <?!= include('Header') ?>
 <?!= include('Style') ?>
 <?!= include('I18n') ?>
@@ -238,6 +238,8 @@ td.overdue{background:#fdecea}
       h('div', { class: 'row' },
         h('label', { class: 'f' }, _t('السنة'), yearSel),
         B.role === 'admin' ? h('button', { class: 'btn sec sm', id: 'btnAddYear', onclick: addYearModal }, _t('＋ إضافة سنة')) : null,
+        B.role === 'admin' && ((S.boot && S.boot.draftYears) || []).indexOf(S.year) !== -1 && !Object.keys(S.data.scores).length ?
+          h('button', { class: 'btn sec sm', id: 'btnDraft', onclick: draftModal }, _t('تحميل مسودة ') + S.year) : null,
         h('div', { class: 'grow' }, per),
         S.tab === 'eval' && S.period !== 'ANNUAL' ? h('div', { class: 'tabs' },
           h('button', { class: 'tab' + (S.view === 'matrix' ? ' on' : ''), id: 'vMatrix', onclick: function () { S.view = 'matrix'; render(); } }, _t('مصفوفة')),
@@ -726,6 +728,11 @@ td.overdue{background:#fdecea}
   function reopenModal() {
     var ta = h('textarea', { rows: 3, id: 'reopenNote', placeholder: _t('سبب إعادة الفتح (يُسجَّل في سجل التغييرات)') });
     modal(_t('إعادة فتح ') + PNAME[S.period] + ' ' + S.year, ta, function () { if (!ta.value.trim()) { toast(_t('اكتب السبب'), true); return false; } setStatus('draft', ta.value); });
+  }
+  function draftModal() {
+    modal(_t('تحميل مسودة ') + S.year, h('p', { text: _t('سيتم استبدال بنود وموظفي ودرجات هذه السنة بمسودة استرشادية مشتقة من السنة السابقة مع تعديلات. متابعة؟') }), function () {
+      call('apiLoadDraftYear', S.year).then(function (r) { S.boot = r.boot; S.dirty = {}; S.cdirty = {}; S.data = r.data; S.tab = 'eval'; render(); toast(_t('تم تحميل المسودة')); }).catch(fail);
+    }, _t('تحميل'));
   }
   function addYearModal() {
     var maxY = Math.max.apply(null, S.boot.years);

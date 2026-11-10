@@ -33,7 +33,8 @@ ok(audit().filter(r => r.action === 'denied' && r.by === 'view@sr.edu.sa').lengt
 
 /* ---- evaluator ---- */
 as('ed@sr.edu.sa');
-let r = A.apiSaveScores(2026, 'Q1', [{ emp: 'E01', crit: 'C01', score: 4 }], { E01: 'ملاحظة المحرر' }); ok(r.saved === 1 && r.comments['Q1|E01'].text === 'ملاحظة المحرر', 'evaluator saves manager item + comment');
+const old0 = A.apiYear(2026).scores['Q1|E01|C01'], nv = old0 === 4 ? 3 : 4;   // 2026 holds a derived draft, so the cell already has a value
+let r = A.apiSaveScores(2026, 'Q1', [{ emp: 'E01', crit: 'C01', score: nv }], { E01: 'ملاحظة المحرر' }); ok(r.saved === 1 && r.comments['Q1|E01'].text === 'ملاحظة المحرر', 'evaluator saves manager item + comment');
 assert.throws(() => A.apiSaveScores(2026, 'Q1', [{ emp: 'E01', crit: 'C19', score: 5 }], {}), /CIO/); pass++;
 A.apiSaveFollowUp({ year: 2026, period: 'Q1', empId: 'E01', action: 'دورة', due: '2026-12-01', status: 'open' });
 for (const n of ['apiSetStatus', 'apiAddYear', 'apiSaveEmployee', 'apiSaveCriterion', 'apiSaveBands', 'apiSetup', 'apiUsers', 'apiSaveUser', 'apiDeleteUser', 'apiAudit']) throwsAuth(calls[n], 'evaluator denied ' + n);
@@ -61,7 +62,7 @@ A.apiAddYear(2027, 2026); A.apiSaveFollowUp({ year: 2027, period: 'Q1', empId: '
 /* ---- audit content ---- */
 const rows = audit(); const by = a => rows.filter(x => x.action === a);
 const cell = by('score.edit').find(x => x.empId === 'E01' && x.ref === 'C01' && x.by === 'ed@sr.edu.sa');
-ok(cell && cell.new === "4" && cell.old === '' && cell.year === 2026 && cell.period === 'Q1' && cell.role === 'evaluator', 'score.edit has who/role/where/old/new');
+ok(cell && cell.new === String(nv) && cell.old === String(old0) && cell.year === 2026 && cell.period === 'Q1' && cell.role === 'evaluator', 'score.edit has who/role/where/old/new');
 ok(by('comment.edit').some(x => x.new === 'ملاحظة المحرر' && x.by === 'ed@sr.edu.sa'), 'comment.edit audited');
 ok(by('status.change').length === 2 && by('status.change')[1].old === 'final' && by('status.change')[1].details === 'تصحيح', 'status.change old/new/reason');
 ok(by('employee.save').some(x => /sector: .* → NOC/.test(x.details)), 'employee.save diff'); ok(by('criterion.save').length === 1 && /max|ar:/.test(by('criterion.save')[0].details || 'ar:'), 'criterion.save audited');

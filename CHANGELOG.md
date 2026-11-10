@@ -1,5 +1,15 @@
 # Changelog — SRU Performance Appraisal (منصة المتابعة والتقييم السنوي للأداء)
 
+## v1.9 — 2026-11-10
+**2026 completed from 2025 — with deliberate differences (indicative draft data)**
+- `tools/derive_year.py` derives 2026 from 2025 inside `Seed.gs` (deterministic, re-runnable).
+- Criteria 2026: «Appearance» removed; «Information Security» added (C20); «Open to change» item reworded; total still 100.
+- Team 2026: E10 (SAHZA) inactive; two new hires (`New Staff 1/2`, rename them in the Employees tab) scored from Q2.
+- Scores 2026: Q1–Q3 filled from each employee's 2025 profile with individual trends; Q4 left blank (year in progress). Status draft, note says the scores are indicative.
+- New admin button «تحميل مسودة 2026» (and sheet menu item) applies the draft to an existing platform: `apiLoadDraftYear`. First-time `setup()` loads it automatically.
+- A closed (all-final) year no longer lists employees who have no scores in it (later joiners).
+- Tests updated: unit 105 · admin 122 · e2e 51 · i18n 12.
+
 ## v1.8 — 2026-11-10
 - **Fix:** the «لوحة المؤشرات» / «التقييم والمتابعة» header links now open in the top window (`target="_top"`). Inside the Apps Script sandbox iframe they loaded the page in the frame, which Google blocks (grey page with a "blocked" icon).
 

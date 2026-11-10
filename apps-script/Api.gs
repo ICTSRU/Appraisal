@@ -104,7 +104,8 @@ function yearData_(year) {
   readTable_('Scores').filter(function (r) { return Number(r.year) === year && r.score !== ''; }).forEach(function (r) {
     scores[scoreKey_(r.period, r.empId, r.critId)] = Number(r.score); withScores[r.empId] = true;
   });
-  const emps = employeesAll_().filter(function (e) { return e.active || withScores[e.id]; });
+  const allFinal = Object.keys(periods).length > 0 && Object.keys(periods).every(function (k) { return periods[k].status === 'final'; });
+  const emps = employeesAll_().filter(function (e) { return withScores[e.id] || (e.active && !allFinal); });   // an employee who joined later is not listed in a closed past year
   const comments = {};
   readTable_('Comments').filter(function (r) { return Number(r.year) === year; }).forEach(function (r) {
     comments[r.period + '|' + r.empId] = { text: String(r.text), by: String(r.by), at: String(r.at) };
@@ -122,7 +123,8 @@ function yearData_(year) {
 function apiBoot() {
   const ctx = requirePerm_('data.read');
   return { user: ctx.email, name: userName_(ctx.email), role: ctx.role, version: APP_VERSION,
-           years: yearsList_(), employees: employeesAll_(), bands: getBands_(), perms: permsOf_(ctx.role) };
+           years: yearsList_(), employees: employeesAll_(), bands: getBands_(), perms: permsOf_(ctx.role),
+           draftYears: (typeof SEED !== 'undefined' && SEED.derived) ? Object.keys(SEED.derived).map(Number) : [] };
 }
 
 function apiYear(year) {
@@ -404,6 +406,56 @@ function clearYearScores() {
   ui.alert('تم مسح درجات ' + y);
 }
 
+
+/** Writes criteria + periods + scores of one SEED year (replacing whatever that year held). */
+function seedCriteria_(y) { return (SEED.criteriaByYear && SEED.criteriaByYear[y]) || SEED.criteria; }
+function loadSeedYear_(y, at) {
+  const crit = seedCriteria_(y);
+  const status = Number(y) < new Date().getFullYear() ? 'final' : 'draft';
+  const derived = SEED.derived && SEED.derived[y];
+  const hasScores = PERIODS.some(function (p) { return Object.keys(SEED.years[y][p] || {}).length; });
+  const note = derived ? 'مسودة مشتقة من بيانات ' + derived + ' مع تعديل البنود والفريق — درجات استرشادية تُستبدل بالتقييم الفعلي' :
+    !hasScores ? 'سنة جديدة — الموظفون والبنود جاهزة بدون درجات' : status === 'draft' ? 'مستورد من ملف Appraisal_form ' + y + ' — يحتاج مراجعة قبل الاعتماد' : 'مستورد من ملف Appraisal_form ' + y;
+  const num = Number(y), other = function (r) { return Number(r.year) !== num; };
+  writeTable_('Criteria', readTable_('Criteria').filter(other));
+  writeTable_('Periods', readTable_('Periods').filter(other));
+  writeTable_('Scores', readTable_('Scores').filter(other));
+  appendRows_('Criteria', crit.map(function (c) { return { year: num, id: c.id, order: c.order, compEn: c.compEn, compAr: c.compAr, en: c.en, ar: c.ar, max: c.max, by: c.by, active: true }; }));
+  appendRows_('Periods', PERIODS.map(function (p) { return { year: num, period: p, status: status, note: note, updatedBy: 'import', updatedAt: at }; }));
+  const sc = [];
+  PERIODS.forEach(function (p) {
+    const per = SEED.years[y][p] || {};
+    Object.keys(per).forEach(function (e) {
+      per[e].forEach(function (v, i) { if (v !== null && v !== undefined) sc.push({ year: num, period: p, empId: e, critId: crit[i].id, score: v, by: 'import', at: at }); });
+    });
+  });
+  appendRows_('Scores', sc);
+  return sc.length;
+}
+
+/** Admin: applies the derived draft year of the seed (team + criteria changes + indicative scores) to an EXISTING platform. Replaces that year's scores. */
+function apiLoadDraftYear(year) {
+  requirePerm_('setup');
+  if (typeof SEED === 'undefined') throw new Error('ملف Seed.gs غير موجود أو قديم — الصق نسخة v1.9');
+  year = String(year || 2026);
+  if (!SEED.derived || !SEED.derived[year]) throw new Error('لا توجد مسودة مشتقة للسنة ' + year + ' في Seed.gs');
+  const n = withLock_(function () {
+    const at = now_(), have = {}; readTable_('Employees').forEach(function (e) { have[e.id] = e; });
+    const emps = readTable_('Employees');
+    SEED.employees.forEach(function (e) {
+      if (have[e.id]) { if (e.active === false) have[e.id].active = false; }
+      else emps.push({ id: e.id, name: e.name, fullName: '', sector: '', active: e.active !== false, order: emps.length + 1 });
+    });
+    writeTable_('Employees', emps);
+    const cnt = loadSeedYear_(year, at);
+    audit_(null, 'setup', { entity: 'year', year: Number(year), details: 'draft year ' + year + ' derived from ' + SEED.derived[year] + ': ' + cnt + ' indicative scores, criteria + team changes' });
+    return cnt;
+  });
+  rebuildResults_(Number(year));
+  return { loaded: n, boot: apiBoot(), data: yearData_(Number(year)) };
+}
+function loadDraft2026() { SpreadsheetApp.getUi().alert('تم تحميل ' + apiLoadDraftYear(2026).loaded + ' درجة استرشادية لسنة 2026'); }
+
 /* ------------------------------- Setup ------------------------------- */
 /** Menu ▸ 1) — creates every tab and (once) loads the 2025/2026 data from the original workbooks. Safe to re-run. */
 function setup() {
@@ -411,22 +463,8 @@ function setup() {
   let seeded = false;
   if (!readTable_('Employees').length && typeof SEED !== 'undefined') {
     const at = now_();
-    appendRows_('Employees', SEED.employees.map(function (e, i) { return { id: e.id, name: e.name, fullName: '', sector: '', active: true, order: i + 1 }; }));
-    Object.keys(SEED.years).forEach(function (y) {
-      const status = Number(y) < new Date().getFullYear() ? 'final' : 'draft';
-      appendRows_('Criteria', SEED.criteria.map(function (c) { return { year: Number(y), id: c.id, order: c.order, compEn: c.compEn, compAr: c.compAr, en: c.en, ar: c.ar, max: c.max, by: c.by, active: true }; }));
-      const hasScores = PERIODS.some(function (p) { return Object.keys(SEED.years[y][p] || {}).length; });
-      const note = !hasScores ? 'سنة جديدة — الموظفون والبنود جاهزة بدون درجات' : status === 'draft' ? 'مستورد من ملف Appraisal_form ' + y + ' — يحتاج مراجعة قبل الاعتماد' : 'مستورد من ملف Appraisal_form ' + y;
-      appendRows_('Periods', PERIODS.map(function (p) { return { year: Number(y), period: p, status: status, note: note, updatedBy: 'import', updatedAt: at }; }));
-      const sc = [];
-      PERIODS.forEach(function (p) {
-        const per = SEED.years[y][p] || {};
-        Object.keys(per).forEach(function (e) {
-          per[e].forEach(function (v, i) { if (v !== null && v !== undefined) sc.push({ year: Number(y), period: p, empId: e, critId: SEED.criteria[i].id, score: v, by: 'import', at: at }); });
-        });
-      });
-      appendRows_('Scores', sc);
-    });
+    appendRows_('Employees', SEED.employees.map(function (e, i) { return { id: e.id, name: e.name, fullName: '', sector: '', active: e.active !== false, order: i + 1 }; }));
+    Object.keys(SEED.years).forEach(function (y) { loadSeedYear_(y, at); });
     writeTable_('Settings', [{ key: 'bands', value: JSON.stringify(DEFAULT_BANDS) }]);
     audit_(null, 'setup', { entity: 'platform', details: 'import 2025/2026 from workbooks' });
     seeded = true;

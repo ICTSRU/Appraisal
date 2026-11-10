@@ -33,7 +33,7 @@ const SHIM = `(function(){function mk(ok,no){return new Proxy({}, {get:function(
   let p = await open('m.elmahdy@sr.edu.sa', '/');
   await p.waitForSelector('#matrix'); await p.screenshot({ path: SHOT + '/01_matrix_admin.png' });
   ok(await p.locator('#yearSel').inputValue() === '2026', 'default year 2026');
-  ok(await p.locator('#matrix thead th').count() === 3 + 11, '11 employee columns');
+  ok(await p.locator('#matrix thead th').count() === 3 + 12, '12 employee columns (2026 team)');
   ok(await p.locator('#matrix tbody tr').count() === 19, '19 criteria rows');
   ok((await p.locator('#stBadge').textContent()) === 'مسودة', '2026 is draft');
   // switch to 2025: final → admin can edit (admin) ; check total of M.Mahdy Q1 = 86

@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- *  SRU Performance Appraisal Platform (منصة المتابعة والتقييم السنوي للأداء) v1.8
+ *  SRU Performance Appraisal Platform (منصة المتابعة والتقييم السنوي للأداء) v1.9
  *  Built on SRU Secure Access Kit v1.4 — Sulaiman Al Rajhi University Google accounts (@sr.edu.sa) only
  *  ICTD — ITOC
  * ---------------------------------------------------------------------
@@ -19,7 +19,7 @@
 /* ▼▼▼ CONFIG — change per platform ▼▼▼ */
 const APP_NAME       = 'منصة المتابعة والتقييم السنوي للأداء';
 const APP_NAME_EN    = 'SRU Performance Appraisal';
-const APP_VERSION    = '1.8';
+const APP_VERSION    = '1.9';
 const ALLOWED_DOMAIN = 'sr.edu.sa';
 const FAVICON_URL    = 'https://ictsru.github.io/ITOC/assets/itoc-logo.png';
 
@@ -277,6 +277,7 @@ function onOpen() {
       .addItem('2) إعداد قائمة المصرّح لهم (AllowedUsers)', 'setupAccessList')
       .addSeparator()
       .addItem('إعادة بناء ورقة Results', 'rebuildAllResults')
+      .addItem('تحميل مسودة 2026 (مشتقة من 2025)', 'loadDraft2026')
       .addItem('مسح درجات سنة (2026 مثلاً)', 'clearYearScores')
       .addItem('ملخص سجل الدخول (30 يومًا)', 'showLogSummary')
       .addItem('حذف سجلات الدخول القديمة', 'purgeOldLogs')

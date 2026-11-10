@@ -18,8 +18,17 @@ excel['2025'].forEach((exp, i) => { const a = d25.computed.annual['E' + String(i
 console.log('annual 2025 differences vs Excel:', JSON.stringify(diffs));
 ok(diffs.length === 1 && diffs[0][1] === 6, 'only Ammar (E06) differs in 2025 (Excel patched the blank item with another employee\'s score)');
 // 2026: Inshrah has only Q1 → partial (Excel shows 17.5 because blanks count as 0)
-ok(d26.employees.length === 11 && d26.criteria.filter(c => c.active).length === 19 && Object.keys(d26.scores).length === 0, '2026 seeded with employees+criteria and NO scores');
-ok(d26.computed.annual.E11.quarters === 0 && d26.computed.annual.E11.n === 0, '2026 blank → nothing computed');
+// 2026 = derived draft: different team + criteria than 2025, Q1–Q3 scored, Q4 blank
+ok(d26.employees.length === 12 && !d26.employees.some(e => e.id === 'E10') && d26.employees.some(e => e.id === 'E12'), '2026 team differs (E10 left, two new hires)');
+ok(!d25.employees.some(e => e.id === 'E12'), '2025 does not list later joiners');
+ok(d26.criteria.filter(c => c.active).length === 19 && !d26.criteria.some(c => c.id === 'C09') && d26.criteria.some(c => c.id === 'C20'), '2026 criteria differ (Appearance out, Info-security in)');
+ok(d26.criteria.reduce((s, c) => s + c.max, 0) === 100, '2026 still totals 100');
+ok(Object.keys(d26.scores).length > 0 && !Object.keys(d26.scores).some(k => k.startsWith('Q4|')), '2026 has Q1–Q3 draft scores and a blank Q4');
+ok(d26.computed.annual.E12.quarters === 2 && d26.computed.annual.E01.quarters === 3, 'partial year handled (new hire 2 quarters, others 3)');
+ok(String(d26.periods.Q1.note).indexOf('مسودة مشتقة') === 0, 'draft note explains scores are indicative');
+{ const a = A.apiYear(2025).scores, b = d26.scores; ok(Object.keys(b).filter(k => k.startsWith('Q1|E01|')).some(k => b[k] !== a[k]), '2026 scores are not a copy of 2025'); }
+// admin migration for an existing platform: wipe 2026 draft then re-apply
+{ const n0 = Object.keys(d26.scores).length; const r2 = A.apiLoadDraftYear(2026); ok(r2.loaded === n0 && Object.keys(r2.data.scores).length === n0, 'apiLoadDraftYear reloads the draft idempotently'); }
 // statuses
 ok(d25.periods.Q1.status === 'final' && d26.periods.Q1.status === 'draft', 'statuses');
 // results sheet
@@ -61,9 +70,9 @@ const py = A.apiAddYear(2024, 2025); ok(py.years[0] === 2024, 'add past year 202
 assert.throws(() => A.apiAddYear(2027, 2026), /موجودة/); pass++;
 r = A.apiSaveScores(2024, 'Q1', [{ emp: 'E02', crit: 'C01', score: 3.5 }]); ok(r.scores['Q1|E02|C01'] === 3.5, 'backfill 2024 half point');
 // employees / criteria / bands / follow-up
-let emps = A.apiSaveEmployee({ name: 'New Person', active: true }); ok(emps.length === 12 && emps[11].id === 'E12', 'add employee');
-emps = A.apiSaveEmployee({ id: 'E12', name: 'New Person', active: false }); ok(emps[11].active === false, 'deactivate');
-let y = A.apiSaveCriterion(2027, { compAr: 'م', compEn: 'New', ar: 'بند جديد', en: 'New item', max: 5, by: 'manager', active: true }); ok(y.criteria.length === 20 && y.criteria[19].id === 'C20', 'new criterion');
+let emps = A.apiSaveEmployee({ name: 'New Person', active: true }); ok(emps.length === 14 && emps[13].id === 'E14', 'add employee');
+emps = A.apiSaveEmployee({ id: 'E14', name: 'New Person', active: false }); ok(emps[13].active === false, 'deactivate');
+let y = A.apiSaveCriterion(2027, { compAr: 'م', compEn: 'New', ar: 'بند جديد', en: 'New item', max: 5, by: 'manager', active: true }); ok(y.criteria.length === 20 && y.criteria[19].id === 'C21', 'new criterion');
 assert.throws(() => A.apiSaveCriterion(2025, { id: 'C01', ar: 'x', en: 'x', max: 2, by: 'manager' }), /أعلى/); pass++;
 const bands = A.apiSaveBands([{ min: 85, ar: 'ممتاز' }, { min: 70, ar: 'جيد' }, { min: 0, ar: 'ضعيف' }]); ok(bands.length === 3, 'bands');
 assert.throws(() => A.apiSaveBands([{ min: 50, ar: 'x' }, { min: 20, ar: 'y' }]), /0/); pass++;
@@ -75,5 +84,5 @@ ok(A.readTable_('AuditLog').length > 10, 'audit log written');
 const n = A.readTable_('Scores').length; A.setup(); ok(A.readTable_('Scores').length === n, 'setup is idempotent');
 // clearYearScores (menu) wipes one year only
 { const G2 = create(), A2 = G2.api; A2.setup(); const ui = G2.ctx.SpreadsheetApp; ui.getUi = () => ({ ButtonSet: { OK_CANCEL: 1, YES_NO: 2 }, Button: { OK: 'OK', YES: 'YES' }, prompt: () => ({ getSelectedButton: () => 'OK', getResponseText: () => '2025' }), alert: () => 'YES' });
-  const n0 = A2.readTable_('Scores').length; A2.clearYearScores(); ok(n0 > 0 && A2.readTable_('Scores').length === 0 && A2.apiYear(2025).criteria.length === 19 && A2.apiYear(2025).employees.length === 11, 'clearYearScores keeps employees/criteria'); }
+  const n0 = A2.readTable_('Scores').length; A2.clearYearScores(); const left = A2.readTable_('Scores'); ok(n0 > 0 && left.length > 0 && left.every(r => r.year === 2026) && A2.apiYear(2025).criteria.length === 19 && A2.apiYear(2026).employees.length === 12, 'clearYearScores wipes only the chosen year and keeps criteria/team'); }
 console.log('unit tests passed:', pass);
